@@ -17,6 +17,12 @@
    - `provider_type`のユニーク制約設定
    - J-Quants APIの基本設定
 
+4. データソース認証情報の管理
+   - `DataSourceCredential`スキーマの作成
+   - ユーザーとデータソースの関連付け
+   - 認証情報の暗号化保存（Phoenix.Token使用）
+   - トークン管理（リフレッシュトークン、IDトークン）
+
 ### 実装詳細
 
 #### ユーザー認証
@@ -65,10 +71,39 @@
   }
   ```
 
+#### データソース認証情報
+- スキーマ定義
+  ```elixir
+  schema "data_source_credentials" do
+    field :encrypted_credentials, :binary
+    field :refresh_token, :string
+    field :refresh_token_expired_at, :utc_datetime
+    field :id_token, :string
+    field :id_token_expired_at, :utc_datetime
+
+    belongs_to :user, MoomooMarkets.Accounts.User
+    belongs_to :data_source, MoomooMarkets.DataSources.DataSource
+
+    timestamps(type: :utc_datetime)
+  end
+  ```
+- 認証情報の暗号化
+  ```elixir
+  # 認証情報の暗号化と保存
+  credentials = %{
+    mailaddress: System.get_env("SEED_JQUANTS_EMAIL"),
+    password: System.get_env("SEED_JQUANTS_PASSWORD")
+  }
+
+  encrypted_credentials = credentials
+    |> Jason.encode!()
+    |> Encryption.encrypt()
+  ```
+
 ### 次のステップ
 1. データソースクライアントの実装
    - J-Quants APIクライアント
-   - 認証情報の管理
+   - 認証情報の自動更新
    - レート制限の実装
 
 2. データ取得バッチの実装

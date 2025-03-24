@@ -27,11 +27,17 @@
 - 属性：
   - `user_id`: ユーザーID（外部キー）
   - `data_source_id`: データソースID（外部キー）
-  - `encrypted_credentials`: 暗号化された認証情報
+  - `encrypted_credentials`: 暗号化された認証情報（JSON形式）
+    ```json
+    {
+      "mailaddress": "user@example.com",
+      "password": "password123"
+    }
+    ```
   - `refresh_token`: リフレッシュトークン
-  - `refresh_token_expired_at`: リフレッシュトークンの有効期限
+  - `refresh_token_expired_at`: リフレッシュトークンの有効期限（1週間）
   - `id_token`: IDトークン
-  - `id_token_expired_at`: IDトークンの有効期限
+  - `id_token_expired_at`: IDトークンの有効期限（24時間）
 
 ### JobGroup
 - データ取得ジョブのグループ
@@ -138,4 +144,30 @@ defmodule MoomooMarkets.DataSources.Endpoints do
     }
   end
 end
-``` 
+```
+
+## 認証情報の管理
+
+### DataSourceCredentialの主要機能
+
+1. 認証情報の暗号化
+   - ユーザーの認証情報（メールアドレス、パスワード）をJSON形式で暗号化
+   - AES-256-GCMによる暗号化
+   - キーローテーション対応
+
+2. トークン管理
+   - リフレッシュトークン（1週間有効）
+   - IDトークン（24時間有効）
+   - トークンの有効期限管理
+   - 自動更新機能
+
+3. セキュリティ対策
+   - 認証情報の暗号化保存
+   - トークンの有効期限管理
+   - ユーザーごとの認証情報分離
+   - データソースごとの認証情報分離
+
+4. パフォーマンス最適化
+   - インデックスによる高速な検索
+   - トークンの有効性チェックの効率化
+   - キャッシュ戦略の実装
