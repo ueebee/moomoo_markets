@@ -1,64 +1,82 @@
-# 作業進捗
+# 実装進捗
 
-## 2024-03-24
+## 認証システムの実装
 
-### 認証システムの実装
-
+### 完了項目
 1. ユーザー認証システムの生成
-   ```bash
-   mix phx.gen.auth Accounts User users
-   ```
-   - ユーザー登録、ログイン、パスワードリセットなどの基本機能を生成
-   - LiveViewベースの認証システムを選択
+   - `mix phx.gen.auth Accounts User users`コマンドで生成
+   - 必要なテーブルとマイグレーションが作成
 
-2. 環境変数の設定
-   - `.env` ファイルを作成し、シードユーザーの情報を設定
-   ```
-   SEED_USER_EMAIL=admin@example.com
-   SEED_USER_PASSWORD=iS6gLseT$w*AA666
-   ```
+2. シードユーザーの設定
+   - 環境変数による設定（`.env`ファイル）
+   - デフォルト値の設定
+   - ユーザー作成時の確認済み状態の設定
 
-3. 環境変数の読み込み設定
-   - `dotenv` パッケージを追加（バージョン3.0.0）
-   - `config/runtime.exs` で環境変数の読み込みを設定
-   - 開発環境とテスト環境でのみ `.env` ファイルを読み込むように設定
+3. データソースの基本構造
+   - `DataSource`スキーマの作成
+   - `provider_type`のユニーク制約設定
+   - J-Quants APIの基本設定
 
-4. シードスクリプトの実装
-   - `priv/repo/seeds.exs` にシードユーザー作成ロジックを実装
-   - 環境変数からユーザー情報を取得
-   - デフォルト値を設定（環境変数が未設定の場合のフォールバック）
-   - エラーハンドリングの実装
+### 実装詳細
 
-### 実装の詳細
+#### ユーザー認証
+- シードユーザーの設定
+  ```elixir
+  # .env
+  SEED_USER_EMAIL=admin@example.com
+  SEED_USER_PASSWORD=iS6gLseT$w*AA666
+  ```
+- ユーザー作成時の確認済み設定
+  ```elixir
+  user
+  |> Ecto.Changeset.change(confirmed_at: DateTime.utc_now() |> DateTime.truncate(:second))
+  |> Repo.update!()
+  ```
 
-#### シードユーザーの作成
-```elixir
-# 環境変数からシードユーザーの設定を取得（デフォルト値付き）
-seed_user_email = System.get_env("SEED_USER_EMAIL", "admin@example.com")
-seed_user_password = System.get_env("SEED_USER_PASSWORD", "iS6gLseT$w*AA666")
+#### データソース
+- スキーマ定義
+  ```elixir
+  schema "data_sources" do
+    field :name, :string
+    field :description, :text
+    field :provider_type, :string
+    field :is_enabled, :boolean, default: false
+    field :base_url, :string
+    field :api_version, :string
+    field :rate_limit_per_minute, :integer
+    field :rate_limit_per_hour, :integer
+    field :rate_limit_per_day, :integer
 
-# テストユーザーの作成
-case Accounts.register_user(%{
-  email: seed_user_email,
-  password: seed_user_password,
-  confirmed_at: NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
-}) do
-  {:ok, user} ->
-    IO.puts "Created seed user: #{user.email}"
-  {:error, changeset} ->
-    IO.puts "Failed to create seed user:"
-    IO.inspect(changeset.errors)
-    raise "Failed to create seed user"
-end
-```
+    timestamps(type: :utc_datetime)
+  end
+  ```
+- J-Quants APIの設定
+  ```elixir
+  %DataSource{
+    name: "J-Quants API",
+    description: "JPX Market Innovation & Research, Inc.が提供する日本市場の金融データAPI",
+    provider_type: "jquants",
+    is_enabled: true,
+    base_url: "https://api.jquants.com/v1",
+    api_version: "v1",
+    rate_limit_per_minute: 30,
+    rate_limit_per_hour: 1000,
+    rate_limit_per_day: 10000
+  }
+  ```
 
 ### 次のステップ
-1. データソースの実装
-   - データソースのスキーマとマイグレーションの作成
-   - データソースのCRUD操作の実装
-   - データソースの認証情報の暗号化実装
+1. データソースクライアントの実装
+   - J-Quants APIクライアント
+   - 認証情報の管理
+   - レート制限の実装
 
-2. テストの実装
-   - ユーザー認証のテスト
-   - データソースのテスト
-   - 統合テストの実装 
+2. データ取得バッチの実装
+   - 日次株価データ取得
+   - 企業情報取得
+   - エラーハンドリング
+
+3. ジョブキューシステムの実装
+   - GenServerによるキュー管理
+   - 非同期処理の実装
+   - ジョブの状態管理 

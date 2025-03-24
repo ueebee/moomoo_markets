@@ -16,7 +16,7 @@
 # The command can be run as:
 
 alias MoomooMarkets.Accounts
-
+alias MoomooMarkets.Repo
 
 # 環境変数からシードユーザーの設定を取得（デフォルト値付き）
 seed_user_email = System.get_env("SEED_USER_EMAIL", "test@example.com")
@@ -25,11 +25,14 @@ seed_user_password = System.get_env("SEED_USER_PASSWORD", "89#$%aaw*AA666")
 # テストユーザーの作成
 case Accounts.register_user(%{
   email: seed_user_email,
-  password: seed_user_password,
-  confirmed_at: NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+  password: seed_user_password
 }) do
   {:ok, user} ->
-    IO.puts "Created seed user: #{user.email}"
+    # ユーザーを直接確認済みにする
+    user
+    |> Ecto.Changeset.change(confirmed_at: DateTime.utc_now() |> DateTime.truncate(:second))
+    |> Repo.update!()
+    IO.puts "Created and confirmed seed user: #{user.email}"
   {:error, changeset} ->
     IO.puts "Failed to create seed user:"
     IO.inspect(changeset.errors)
