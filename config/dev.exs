@@ -1,3 +1,11 @@
+# This file is responsible for configuring your development
+# environment as well as your editor configs, dialyzer configs,
+# etc. While in a way mimicing the config/config.exs
+# structure, it is not intended to be imported in its entirety.
+# Instead, you should make use of the import functions again to
+# properly import only what is needed, such as the repository
+# and system parts.
+
 import Config
 
 # Configure your database

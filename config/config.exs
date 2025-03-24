@@ -3,10 +3,10 @@
 #
 # This configuration file is loaded before any dependency and
 # is restricted to this project.
-
 # General application configuration
 import Config
 
+# Configure your database
 config :moomoo_markets,
   ecto_repos: [MoomooMarkets.Repo],
   generators: [timestamp_type: :utc_datetime]

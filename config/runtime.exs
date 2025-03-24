@@ -1,4 +1,15 @@
+# This file is responsible for loading your application and all its
+# dependencies and configuring your application.
+#
+# This file is loaded before any dependency and is restricted to this project.
+
+# Load .env file first
+if Mix.env() in [:dev, :test, :prod] do
+  Dotenv.load()
+end
+
 import Config
+
 
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
