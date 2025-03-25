@@ -23,6 +23,12 @@
    - 認証情報の暗号化保存（Phoenix.Token使用）
    - トークン管理（リフレッシュトークン、IDトークン）
 
+5. データソースクライアントの設計
+   - 共通インターフェースの定義
+   - ディレクトリ構造の設計
+   - エラーハンドリングの設計
+   - 型定義の設計
+
 ### 実装詳細
 
 #### ユーザー認証
@@ -98,6 +104,26 @@
   encrypted_credentials = credentials
     |> Jason.encode!()
     |> Encryption.encrypt()
+  ```
+
+#### データソースクライアント
+- 共通インターフェース
+  ```elixir
+  defmodule MoomooMarkets.DataSources.Client do
+    @callback fetch_data(any(), keyword()) :: {:ok, any()} | {:error, any()}
+    @callback refresh_token(any()) :: {:ok, any()} | {:error, any()}
+  end
+  ```
+- ディレクトリ構造
+  ```
+  lib/
+    moomoo_markets/
+      data_sources/
+        client.ex           # 共通のクライアントビヘイビア
+        types.ex           # 共通の型定義
+        error.ex           # 共通のエラー定義
+        jquants/           # J-Quants固有の実装
+        yfinance/          # yfinance固有の実装
   ```
 
 ### 次のステップ
