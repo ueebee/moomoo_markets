@@ -61,7 +61,8 @@ defmodule MoomooMarkets.MixProject do
       {:bandit, "~> 1.5"},
       {:dotenv, "~> 3.1.0"},
       {:req, "~> 0.5.10"},
-      {:joken, "~> 2.5"}
+      {:joken, "~> 2.5"},
+      {:bypass, "~> 2.1", only: :test}
     ]
   end
 

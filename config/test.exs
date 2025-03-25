@@ -38,3 +38,6 @@ config :phoenix, :plug_init_mode, :runtime
 # Enable helpful, but potentially expensive runtime checks
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
+
+# Configure J-Quants API base URL for test environment
+config :moomoo_markets, :jquants_api_base_url, "http://localhost:#{System.get_env("BYPASS_PORT", "4040")}"

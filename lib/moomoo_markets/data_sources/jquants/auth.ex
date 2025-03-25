@@ -7,7 +7,6 @@ defmodule MoomooMarkets.DataSources.JQuants.Auth do
   alias MoomooMarkets.{Encryption, Repo, DataSources.DataSource, DataSources.DataSourceCredential}
   import Ecto.Query
 
-  @base_url "https://api.jquants.com/v1"
   @refresh_token_path "/token/auth_user"
   @id_token_path "/token/auth_refresh"
 
@@ -25,7 +24,7 @@ defmodule MoomooMarkets.DataSources.JQuants.Auth do
 
         # リフレッシュトークンが有効な場合
         is_refresh_token_valid?(credential) ->
-          with {:ok, token} <- get_id_token(credential.refresh_token),
+          with {:ok, token} <- get_id_token(credential),
                {:ok, _credential} <- update_id_token(credential, token) do
             {:ok, token.id_token}
           end
@@ -35,7 +34,7 @@ defmodule MoomooMarkets.DataSources.JQuants.Auth do
           with {:ok, credentials} <- get_credentials(user_id),
                {:ok, refresh_token} <- get_refresh_token(credentials),
                {:ok, credential_with_refresh} <- update_refresh_token(credential, refresh_token),
-               {:ok, id_token} <- get_id_token(refresh_token.refresh_token),
+               {:ok, id_token} <- get_id_token(credential_with_refresh),
                {:ok, _credential} <- update_id_token(credential_with_refresh, id_token) do
             {:ok, id_token.id_token}
           end
@@ -92,9 +91,9 @@ defmodule MoomooMarkets.DataSources.JQuants.Auth do
   @doc """
   IDトークンを取得します
   """
-  @spec get_id_token(String.t()) :: {:ok, Types.t()} | {:error, Error.t()}
-  def get_id_token(refresh_token) do
-    with {:ok, response} <- request_id_token(refresh_token),
+  @spec get_id_token(Types.credentials()) :: {:ok, Types.t()} | {:error, Error.t()}
+  def get_id_token(credential) do
+    with {:ok, response} <- request_id_token(credential),
          {:ok, token} <- parse_id_token_response(response) do
       {:ok, token}
     else
@@ -163,56 +162,60 @@ defmodule MoomooMarkets.DataSources.JQuants.Auth do
   end
 
   defp request_refresh_token(credentials) do
-    url = @base_url <> @refresh_token_path
+    with {:ok, base_url} <- get_base_url() do
+      url = base_url <> @refresh_token_path
 
-    case Req.post(url, json: credentials) do
-      {:ok, %Req.Response{status: 200, body: body}} ->
-        {:ok, body}
+      case Req.post(url, json: credentials) do
+        {:ok, %Req.Response{status: 200, body: body}} ->
+          {:ok, body}
 
-      {:ok, %Req.Response{status: status, body: %{"message" => message}}} ->
-        {:error, %Error{
-          message: "Failed to get refresh token: #{message}",
-          code: "HTTP_#{status}"
-        }}
+        {:ok, %Req.Response{status: status, body: %{"message" => message}}} ->
+          {:error, %Error{
+            message: "Failed to get refresh token: #{message}",
+            code: "HTTP_#{status}"
+          }}
 
-      {:ok, %Req.Response{status: status}} ->
-        {:error, %Error{
-          message: "Failed to get refresh token",
-          code: "HTTP_#{status}"
-        }}
+        {:ok, %Req.Response{status: status}} ->
+          {:error, %Error{
+            message: "Failed to get refresh token",
+            code: "HTTP_#{status}"
+          }}
 
-      {:error, error} ->
-        {:error, %Error{
-          message: "HTTP request failed: #{inspect(error)}",
-          code: "HTTP_ERROR"
-        }}
+        {:error, error} ->
+          {:error, %Error{
+            message: "HTTP request failed: #{inspect(error)}",
+            code: "HTTP_ERROR"
+          }}
+      end
     end
   end
 
-  defp request_id_token(refresh_token) do
-    url = @base_url <> @id_token_path <> "?refreshtoken=#{refresh_token}"
+  defp request_id_token(credential) do
+    with {:ok, base_url} <- get_base_url() do
+      url = base_url <> @id_token_path <> "?refreshtoken=#{credential.refresh_token}"
 
-    case Req.post(url) do
-      {:ok, %Req.Response{status: 200, body: body}} ->
-        {:ok, body}
+      case Req.post(url) do
+        {:ok, %Req.Response{status: 200, body: body}} ->
+          {:ok, body}
 
-      {:ok, %Req.Response{status: status, body: %{"message" => message}}} ->
-        {:error, %Error{
-          message: "Failed to get ID token: #{message}",
-          code: "HTTP_#{status}"
-        }}
+        {:ok, %Req.Response{status: status, body: %{"message" => message}}} ->
+          {:error, %Error{
+            message: "Failed to get ID token: #{message}",
+            code: "HTTP_#{status}"
+          }}
 
-      {:ok, %Req.Response{status: status}} ->
-        {:error, %Error{
-          message: "Failed to get ID token",
-          code: "HTTP_#{status}"
-        }}
+        {:ok, %Req.Response{status: status}} ->
+          {:error, %Error{
+            message: "Failed to get ID token",
+            code: "HTTP_#{status}"
+          }}
 
-      {:error, error} ->
-        {:error, %Error{
-          message: "HTTP request failed: #{inspect(error)}",
-          code: "HTTP_ERROR"
-        }}
+        {:error, error} ->
+          {:error, %Error{
+            message: "HTTP request failed: #{inspect(error)}",
+            code: "HTTP_ERROR"
+          }}
+      end
     end
   end
 
@@ -242,5 +245,15 @@ defmodule MoomooMarkets.DataSources.JQuants.Auth do
       message: "Invalid ID token response",
       code: "INVALID_RESPONSE"
     }}
+  end
+
+  defp get_base_url do
+    case Repo.one(from d in DataSource, where: d.provider_type == "jquants", select: d.base_url) do
+      nil ->
+        {:error, %Error{message: "J-Quants data source not found", code: "DATA_SOURCE_NOT_FOUND"}}
+
+      base_url ->
+        {:ok, base_url}
+    end
   end
 end
