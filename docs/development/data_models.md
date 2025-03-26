@@ -854,4 +854,237 @@ TradesSpec.fetch_trades_spec("TSEPrime", from_date, to_date)
 
 # 保存されたデータの確認
 Repo.all(TradesSpec)
-``` 
+```
+
+## 信用取引週末残高（Weekly Margin Interest）
+
+### 概要
+J-Quants APIから提供される信用取引週末残高データを管理します。このデータは週末時点での各銘柄の信用取引残高（株数）を提供します。
+
+### データソース
+- エンドポイント: `/markets/weekly_margin_interest`
+- 提供元: J-Quants API
+- 更新頻度: 週次（通常は金曜日基準）
+- 参照: [J-Quants API 信用取引週末残高](https://jpx.gitbook.io/j-quants-ja/api-reference/weekly_margin_interest)
+
+### スキーマ定義
+
+#### weekly_margin_interests テーブル
+
+| フィールド名 | 型 | NULL | 説明 |
+|------------|-----|------|------|
+| code | string | false | 銘柄コード |
+| date | date | false | 申込日付（通常は金曜日） |
+| issue_type | string | false | 銘柄区分（1: 信用銘柄, 2: 貸借銘柄, 3: その他） |
+| short_margin_trade_volume | float | false | 売合計信用取引週末残高 |
+| long_margin_trade_volume | float | false | 買合計信用取引週末残高 |
+| short_negotiable_margin_trade_volume | float | false | 売一般信用取引週末残高 |
+| long_negotiable_margin_trade_volume | float | false | 買一般信用取引週末残高 |
+| short_standardized_margin_trade_volume | float | false | 売制度信用取引週末残高 |
+| long_standardized_margin_trade_volume | float | false | 買制度信用取引週末残高 |
+| inserted_at | utc_datetime | false | レコード作成日時 |
+| updated_at | utc_datetime | false | レコード更新日時 |
+
+#### インデックス
+
+| 名前 | フィールド | 種類 | 説明 |
+|------|------------|------|------|
+| weekly_margin_interests_code_date_index | [code, date] | unique | 銘柄・日付の一意性保証 |
+| weekly_margin_interests_date_index | [date] | index | 日付による検索効率化 |
+| weekly_margin_interests_code_index | [code] | index | 銘柄による検索効率化 |
+| weekly_margin_interests_issue_type_index | [issue_type] | index | 銘柄区分による検索効率化 |
+
+### 制約事項
+
+1. データの特性
+   - コーポレートアクション発生時も株数の遡及調整は行われない
+   - 年末年始など営業日が2日以下の週はデータ非提供
+   - 東証上場銘柄以外（地方取引所単独上場銘柄）は対象外
+
+2. API制約
+   - 銘柄コード（code）または日付（date）のいずれかが必須
+   - レスポンスサイズが大きい場合はページネーション必要
+
+### 主要機能
+
+1. データ取得
+   ```elixir
+   # 特定銘柄の全期間データ取得
+   WeeklyMarginInterest.fetch_by_code(code)
+   
+   # 特定日付の全銘柄データ取得
+   WeeklyMarginInterest.fetch_by_date(date)
+   
+   # 特定銘柄の期間指定データ取得
+   WeeklyMarginInterest.fetch_by_code_and_period(code, from, to)
+   ```
+
+2. データ保存
+   ```elixir
+   # 単一データの保存
+   WeeklyMarginInterest.save_weekly_margin_interest(params)
+   
+   # バッチ処理による一括取得・保存
+   WeeklyMarginInterest.fetch_all_weekly_margin_interests(date)
+   ```
+
+### エラーハンドリング
+
+1. APIエラー
+   - 400: パラメータ不正
+   - 401: 認証エラー
+   - 403: アクセス権限エラー
+   - 413: レスポンスサイズ超過
+   - 500: サーバーエラー
+
+2. 対応方針
+   - トークン期限切れ時の自動リフレッシュ
+   - 大量データ取得時の分割処理
+   - 一時的なエラー発生時のリトライ処理
+
+### 実装計画
+
+1. フェーズ1: 基本実装
+   - スキーマとマイグレーションの作成
+   - 基本的なデータ取得機能の実装
+   - 単体テストの作成
+
+2. フェーズ2: 拡張機能
+   - バッチ処理の実装
+   - エラーハンドリングの強化
+   - 統合テストの追加
+
+3. フェーズ3: 最適化
+   - パフォーマンスチューニング
+   - モニタリング機能の追加
+   - ドキュメントの更新
+
+#### iEXでのデータ取得方法
+```elixir
+# 必要なモジュールのエイリアスを設定
+alias MoomooMarkets.DataSources.JQuants.WeeklyMarginInterest
+alias MoomooMarkets.Repo
+
+# 特定の銘柄の信用取引週末残高を取得（例：86970）
+from_date = ~D[2024-03-20]
+to_date = ~D[2024-03-25]
+WeeklyMarginInterest.fetch_by_code("86970", from_date, to_date)
+
+# 特定の日付の全銘柄の信用取引週末残高を取得
+date = ~D[2024-03-25]
+WeeklyMarginInterest.fetch_by_date(date)
+
+# 保存されたデータの確認
+Repo.all(WeeklyMarginInterest) 
+```
+
+## 週間信用取引残高データ (Weekly Margin Interest)
+
+### 概要
+週間信用取引残高データは、J-Quants APIから取得し、データベースに保存します。
+銘柄ごとの週間信用取引残高（空売り残高、買い残高）を記録します。
+
+### スキーマ定義
+```elixir
+defmodule MoomooMarkets.DataSources.JQuants.WeeklyMarginInterest do
+  use Ecto.Schema
+  import Ecto.Changeset
+
+  @type t :: %__MODULE__{
+    code: String.t(),
+    date: Date.t(),
+    issue_type: String.t(),
+    short_margin_volume: float(),
+    long_margin_volume: float(),
+    inserted_at: NaiveDateTime.t(),
+    updated_at: NaiveDateTime.t()
+  }
+
+  schema "weekly_margin_interests" do
+    field :code, :string
+    field :date, :date
+    field :issue_type, :string
+    field :short_margin_volume, :float
+    field :long_margin_volume, :float
+
+    timestamps()
+  end
+
+  @doc false
+  def changeset(weekly_margin_interest, attrs) do
+    weekly_margin_interest
+    |> cast(attrs, [:code, :date, :issue_type, :short_margin_volume, :long_margin_volume])
+    |> validate_required([:code, :date, :issue_type, :short_margin_volume, :long_margin_volume])
+    |> unique_constraint([:code, :date, :issue_type])
+  end
+end
+```
+
+### マイグレーション
+```elixir
+defmodule MoomooMarkets.Repo.Migrations.CreateWeeklyMarginInterests do
+  use Ecto.Migration
+
+  def change do
+    create table(:weekly_margin_interests) do
+      add :code, :string, null: false, comment: "銘柄コード"
+      add :date, :date, null: false, comment: "日付"
+      add :issue_type, :string, null: false, comment: "発行種別"
+      add :short_margin_volume, :float, null: false, comment: "空売り残高"
+      add :long_margin_volume, :float, null: false, comment: "買い残高"
+
+      timestamps()
+    end
+
+    # 複合ユニーク制約
+    create unique_index(:weekly_margin_interests, [:code, :date, :issue_type])
+
+    # 個別のインデックス
+    create index(:weekly_margin_interests, [:code])
+    create index(:weekly_margin_interests, [:date])
+    create index(:weekly_margin_interests, [:issue_type])
+  end
+end
+```
+
+### 考慮事項
+
+1. **データの重複**
+   - 銘柄コード、日付、発行種別の組み合わせでユニーク制約を設定
+   - 既存データの更新処理の実装
+
+2. **エラーハンドリング**
+   - APIエラーの適切な処理
+   - データの欠損や不正な値の処理
+
+3. **パフォーマンス**
+   - バッチ処理の実装
+   - インデックスの適切な設定
+
+### 実装の優先順位
+
+1. マイグレーションファイルの作成と実行
+2. スキーマの実装
+3. データ取得モジュールの実装
+   - 認証処理
+   - APIリクエスト
+   - レスポンスのパース
+   - データの保存
+4. テストの実装
+   - 正常系テスト
+   - エラー系テスト
+   - データマッピングテスト
+
+### iEXでのデータ取得方法
+```elixir
+# 必要なモジュールのエイリアスを設定
+alias MoomooMarkets.DataSources.JQuants.WeeklyMarginInterest
+alias MoomooMarkets.Repo
+
+# 特定の銘柄の週間信用取引残高データを取得（例：86970）
+from_date = ~D[2024-03-20]
+to_date = ~D[2024-03-25]
+WeeklyMarginInterest.fetch_weekly_margin_interest("86970", from_date, to_date)
+
+# 保存されたデータの確認
+Repo.all(WeeklyMarginInterest)
