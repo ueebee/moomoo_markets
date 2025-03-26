@@ -1088,3 +1088,129 @@ WeeklyMarginInterest.fetch_weekly_margin_interest("86970", from_date, to_date)
 
 # 保存されたデータの確認
 Repo.all(WeeklyMarginInterest)
+```
+
+## 業種別空売り比率データ (Short Selling)
+
+### 概要
+業種別空売り比率データは、J-Quants APIから取得し、データベースに保存します。
+日々の業種（セクター）別の空売り比率に関する売買代金を記録します。
+
+### スキーマ定義
+```elixir
+defmodule MoomooMarkets.DataSources.JQuants.ShortSelling do
+  use Ecto.Schema
+  import Ecto.Changeset
+
+  @type t :: %__MODULE__{
+    date: Date.t(),
+    sector33_code: String.t(),
+    selling_excluding_short_selling_turnover_value: float(),
+    short_selling_with_restrictions_turnover_value: float(),
+    short_selling_without_restrictions_turnover_value: float(),
+    inserted_at: NaiveDateTime.t(),
+    updated_at: NaiveDateTime.t()
+  }
+
+  schema "short_sellings" do
+    field :date, :date
+    field :sector33_code, :string
+    field :selling_excluding_short_selling_turnover_value, :float
+    field :short_selling_with_restrictions_turnover_value, :float
+    field :short_selling_without_restrictions_turnover_value, :float
+
+    timestamps()
+  end
+
+  @doc false
+  def changeset(short_selling, attrs) do
+    short_selling
+    |> cast(attrs, [
+      :date, :sector33_code,
+      :selling_excluding_short_selling_turnover_value,
+      :short_selling_with_restrictions_turnover_value,
+      :short_selling_without_restrictions_turnover_value
+    ])
+    |> validate_required([
+      :date, :sector33_code,
+      :selling_excluding_short_selling_turnover_value,
+      :short_selling_with_restrictions_turnover_value,
+      :short_selling_without_restrictions_turnover_value
+    ])
+    |> unique_constraint([:date, :sector33_code])
+  end
+end
+```
+
+### マイグレーション
+```elixir
+defmodule MoomooMarkets.Repo.Migrations.CreateShortSellings do
+  use Ecto.Migration
+
+  def change do
+    create table(:short_sellings) do
+      add :date, :date, null: false, comment: "日付"
+      add :sector33_code, :string, null: false, comment: "33業種コード"
+      add :selling_excluding_short_selling_turnover_value, :float, null: false, comment: "実注文の売買代金"
+      add :short_selling_with_restrictions_turnover_value, :float, null: false, comment: "価格規制有りの空売り売買代金"
+      add :short_selling_without_restrictions_turnover_value, :float, null: false, comment: "価格規制無しの空売り売買代金"
+
+      timestamps()
+    end
+
+    # 複合ユニーク制約
+    create unique_index(:short_sellings, [:date, :sector33_code])
+
+    # 個別のインデックス
+    create index(:short_sellings, [:date])
+    create index(:short_sellings, [:sector33_code])
+  end
+end
+```
+
+### 考慮事項
+
+1. **データの重複**
+   - 日付と33業種コードの組み合わせでユニーク制約を設定
+   - 既存データの更新処理の実装
+
+2. **エラーハンドリング**
+   - APIエラーの適切な処理
+   - データの欠損や不正な値の処理
+   - 取引高が存在しない日の処理
+
+3. **パフォーマンス**
+   - バッチ処理の実装
+   - インデックスの適切な設定
+   - 大量データ取得時のページネーション対応
+
+### 実装の優先順位
+
+1. マイグレーションファイルの作成と実行
+2. スキーマの実装
+3. データ取得モジュールの実装
+   - 認証処理
+   - APIリクエスト
+   - レスポンスのパース
+   - データの保存
+4. テストの実装
+   - 正常系テスト
+   - エラー系テスト
+   - データマッピングテスト
+
+### iEXでのデータ取得方法
+```elixir
+# 必要なモジュールのエイリアスを設定
+alias MoomooMarkets.DataSources.JQuants.ShortSelling
+alias MoomooMarkets.Repo
+
+# 特定の業種の空売り比率データを取得（例：0050）
+from_date = ~D[2024-03-20]
+to_date = ~D[2024-03-25]
+ShortSelling.fetch_short_selling("0050", from_date, to_date)
+
+# 保存されたデータの確認
+Repo.all(ShortSelling)
+
+# 特定の業種に絞る
+Repo.all(from s in ShortSelling, where: s.sector33_code == "0050", order_by: [desc: s.date])
