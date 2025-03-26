@@ -1060,6 +1060,7 @@ end
 3. **パフォーマンス**
    - バッチ処理の実装
    - インデックスの適切な設定
+   - 大量データ取得時のページネーション対応
 
 ### 実装の優先順位
 
@@ -1214,3 +1215,169 @@ Repo.all(ShortSelling)
 
 # 特定の業種に絞る
 Repo.all(from s in ShortSelling, where: s.sector33_code == "0050", order_by: [desc: s.date])
+```
+
+## 売買内訳データ (Breakdown)
+
+### 概要
+売買内訳データは、J-Quants APIから取得し、データベースに保存します。
+東証上場銘柄の東証市場における銘柄別の日次売買代金・売買高（立会内取引に限る）について、信用取引や空売りの利用に関する発注時のフラグ情報を用いて細分化したデータを記録します。
+
+### スキーマ定義
+```elixir
+defmodule MoomooMarkets.DataSources.JQuants.Breakdown do
+  use Ecto.Schema
+  import Ecto.Changeset
+
+  @type t :: %__MODULE__{
+    date: Date.t(),
+    code: String.t(),
+    long_sell_value: float(),
+    short_sell_without_margin_value: float(),
+    margin_sell_new_value: float(),
+    margin_sell_close_value: float(),
+    long_buy_value: float(),
+    margin_buy_new_value: float(),
+    margin_buy_close_value: float(),
+    long_sell_volume: float(),
+    short_sell_without_margin_volume: float(),
+    margin_sell_new_volume: float(),
+    margin_sell_close_volume: float(),
+    long_buy_volume: float(),
+    margin_buy_new_volume: float(),
+    margin_buy_close_volume: float(),
+    inserted_at: NaiveDateTime.t(),
+    updated_at: NaiveDateTime.t()
+  }
+
+  schema "breakdowns" do
+    field :date, :date
+    field :code, :string
+    field :long_sell_value, :float
+    field :short_sell_without_margin_value, :float
+    field :margin_sell_new_value, :float
+    field :margin_sell_close_value, :float
+    field :long_buy_value, :float
+    field :margin_buy_new_value, :float
+    field :margin_buy_close_value, :float
+    field :long_sell_volume, :float
+    field :short_sell_without_margin_volume, :float
+    field :margin_sell_new_volume, :float
+    field :margin_sell_close_volume, :float
+    field :long_buy_volume, :float
+    field :margin_buy_new_volume, :float
+    field :margin_buy_close_volume, :float
+
+    timestamps()
+  end
+
+  @doc false
+  def changeset(breakdown, attrs) do
+    breakdown
+    |> cast(attrs, [
+      :date, :code,
+      :long_sell_value, :short_sell_without_margin_value,
+      :margin_sell_new_value, :margin_sell_close_value,
+      :long_buy_value, :margin_buy_new_value, :margin_buy_close_value,
+      :long_sell_volume, :short_sell_without_margin_volume,
+      :margin_sell_new_volume, :margin_sell_close_volume,
+      :long_buy_volume, :margin_buy_new_volume, :margin_buy_close_volume
+    ])
+    |> validate_required([
+      :date, :code,
+      :long_sell_value, :short_sell_without_margin_value,
+      :margin_sell_new_value, :margin_sell_close_value,
+      :long_buy_value, :margin_buy_new_value, :margin_buy_close_value,
+      :long_sell_volume, :short_sell_without_margin_volume,
+      :margin_sell_new_volume, :margin_sell_close_volume,
+      :long_buy_volume, :margin_buy_new_volume, :margin_buy_close_volume
+    ])
+    |> unique_constraint([:date, :code])
+  end
+end
+```
+
+### マイグレーション
+```elixir
+defmodule MoomooMarkets.Repo.Migrations.CreateBreakdowns do
+  use Ecto.Migration
+
+  def change do
+    create table(:breakdowns) do
+      add :date, :date, null: false, comment: "売買日"
+      add :code, :string, null: false, comment: "銘柄コード"
+      add :long_sell_value, :float, null: false, comment: "実売りの約定代金"
+      add :short_sell_without_margin_value, :float, null: false, comment: "空売り(信用新規売りを除く)の約定代金"
+      add :margin_sell_new_value, :float, null: false, comment: "信用新規売りの約定代金"
+      add :margin_sell_close_value, :float, null: false, comment: "信用返済売りの約定代金"
+      add :long_buy_value, :float, null: false, comment: "現物買いの約定代金"
+      add :margin_buy_new_value, :float, null: false, comment: "信用新規買いの約定代金"
+      add :margin_buy_close_value, :float, null: false, comment: "信用返済買いの約定代金"
+      add :long_sell_volume, :float, null: false, comment: "実売りの約定株数"
+      add :short_sell_without_margin_volume, :float, null: false, comment: "空売り(信用新規売りを除く)の約定株数"
+      add :margin_sell_new_volume, :float, null: false, comment: "信用新規売りの約定株数"
+      add :margin_sell_close_volume, :float, null: false, comment: "信用返済売りの約定株数"
+      add :long_buy_volume, :float, null: false, comment: "現物買いの約定株数"
+      add :margin_buy_new_volume, :float, null: false, comment: "信用新規買いの約定株数"
+      add :margin_buy_close_volume, :float, null: false, comment: "信用返済買いの約定株数"
+
+      timestamps()
+    end
+
+    # 複合ユニーク制約
+    create unique_index(:breakdowns, [:date, :code])
+
+    # 個別のインデックス
+    create index(:breakdowns, [:date])
+    create index(:breakdowns, [:code])
+  end
+end
+```
+
+### 考慮事項
+
+1. **データの重複**
+   - 日付と銘柄コードの組み合わせでユニーク制約を設定
+   - 既存データの更新処理の実装
+
+2. **エラーハンドリング**
+   - APIエラーの適切な処理
+   - データの欠損や不正な値の処理
+   - 取引高が存在しない日の処理
+   - コーポレートアクション発生時の処理
+
+3. **パフォーマンス**
+   - バッチ処理の実装
+   - インデックスの適切な設定
+   - 大量データ取得時のページネーション対応
+
+### 実装の優先順位
+
+1. マイグレーションファイルの作成と実行
+2. スキーマの実装
+3. データ取得モジュールの実装
+   - 認証処理
+   - APIリクエスト
+   - レスポンスのパース
+   - データの保存
+4. テストの実装
+   - 正常系テスト
+   - エラー系テスト
+   - データマッピングテスト
+
+### iEXでのデータ取得方法
+```elixir
+# 必要なモジュールのエイリアスを設定
+alias MoomooMarkets.DataSources.JQuants.Breakdown
+alias MoomooMarkets.Repo
+
+# 特定の銘柄の売買内訳データを取得
+from_date = ~D[2024-03-20]
+to_date = ~D[2024-03-25]
+Breakdown.fetch_breakdown("13010", from_date, to_date)
+
+# 保存されたデータの確認
+Repo.all(Breakdown)
+
+# 特定の銘柄に絞る
+Repo.all(from b in Breakdown, where: b.code == "13010", order_by: [desc: b.date])
