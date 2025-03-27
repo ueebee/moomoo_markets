@@ -1381,3 +1381,78 @@ Repo.all(Breakdown)
 
 # 特定の銘柄に絞る
 Repo.all(from b in Breakdown, where: b.code == "13010", order_by: [desc: b.date])
+```
+
+## 取引カレンダーデータ (Trading Calendar)
+
+### 概要
+東証およびOSEにおける営業日、休業日、ならびにOSEにおける祝日取引の有無の情報を管理します。
+配信データは[JPXの休業日一覧](https://www.jpx.co.jp/corporate/about-jpx/calendar/index.html)および[祝日取引実施日](https://www.jpx.co.jp/derivatives/rules/holidaytrading/index.html)と同様の内容です。
+
+### スキーマ定義
+```elixir
+defmodule MoomooMarkets.DataSources.JQuants.TradingCalendar do
+  use Ecto.Schema
+  import Ecto.Changeset
+
+  schema "trading_calendars" do
+    field :date, :date, null: false  # 日付 (YYYY-MM-DD)
+    field :holiday_division, :string, null: false  # 休日区分
+
+    timestamps()
+  end
+end
+```
+
+### マイグレーションファイル
+```elixir
+defmodule MoomooMarkets.Repo.Migrations.CreateTradingCalendars do
+  use Ecto.Migration
+
+  def change do
+    create table(:trading_calendars) do
+      add :date, :date, null: false, comment: "日付"
+      add :holiday_division, :string, null: false, comment: "休日区分"
+
+      timestamps()
+    end
+
+    create unique_index(:trading_calendars, [:date])
+    create index(:trading_calendars, [:holiday_division])
+  end
+end
+```
+
+### 休日区分の定義
+休日区分は以下の値を取ります：
+- "1": 営業日
+- "2": 休業日
+- "3": 祝日取引実施日（OSEのみ）
+
+### 考慮事項
+1. データの整合性
+   - 日付と休日区分の組み合わせは一意である必要があります
+   - 休日区分は定義された値のみを受け付けます
+
+2. エラーハンドリング
+   - APIからのエラーレスポンスの適切な処理
+   - 無効な休日区分の検証
+   - 日付範囲の妥当性チェック
+
+3. パフォーマンス
+   - 日付による検索の効率化のためのインデックス
+   - 休日区分による検索の効率化のためのインデックス
+
+### 実装優先順位
+1. マイグレーションファイルの作成
+2. スキーマの実装
+3. データ取得モジュールの実装
+4. テストの実装
+
+### 使用例
+```elixir
+# データの取得
+TradingCalendar.fetch_trading_calendar("1", ~D[2024-01-01], ~D[2024-12-31])
+
+# 特定の日付の営業状況の確認
+TradingCalendar.get_by_date(~D[2024-01-01])
