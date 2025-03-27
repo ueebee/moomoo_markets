@@ -1566,3 +1566,227 @@ Index.fetch_indices("0001", ~D[2024-01-01], ~D[2024-12-31])
 
 # 特定の指数の最新データを確認
 Index.get_latest_by_code("0000")
+```
+
+## 財務情報 (Financial Statements)
+
+### 概要
+上場企業の四半期毎の決算短信サマリーや業績・配当情報の修正に関する開示情報（主に数値データ）を管理します。
+
+### スキーマ定義
+```elixir
+schema "statements" do
+  field :disclosed_date, :date, comment: "開示日"
+  field :disclosed_time, :string, comment: "開示時刻"
+  field :local_code, :string, comment: "銘柄コード"
+  field :disclosure_number, :string, comment: "開示番号"
+  field :type_of_document, :string, comment: "開示書類種別"
+  field :type_of_current_period, :string, comment: "当期区分"
+  field :current_period_start_date, :date, comment: "当期開始日"
+  field :current_period_end_date, :date, comment: "当期終了日"
+  field :current_fiscal_year_start_date, :date, comment: "当期事業年度開始日"
+  field :current_fiscal_year_end_date, :date, comment: "当期事業年度終了日"
+  field :next_fiscal_year_start_date, :date, comment: "次期事業年度開始日"
+  field :next_fiscal_year_end_date, :date, comment: "次期事業年度終了日"
+  
+  # 主要財務指標
+  field :net_sales, :decimal, comment: "売上高"
+  field :operating_profit, :decimal, comment: "営業利益"
+  field :ordinary_profit, :decimal, comment: "経常利益"
+  field :profit, :decimal, comment: "当期純利益"
+  field :earnings_per_share, :decimal, comment: "一株当たり当期純利益"
+  field :diluted_earnings_per_share, :decimal, comment: "希釈後一株当たり当期純利益"
+  field :total_assets, :decimal, comment: "総資産"
+  field :equity, :decimal, comment: "純資産"
+  field :equity_to_asset_ratio, :decimal, comment: "自己資本比率"
+  field :book_value_per_share, :decimal, comment: "一株当たり純資産"
+  
+  # 予想値
+  field :forecast_net_sales, :decimal, comment: "売上高予想"
+  field :forecast_operating_profit, :decimal, comment: "営業利益予想"
+  field :forecast_ordinary_profit, :decimal, comment: "経常利益予想"
+  field :forecast_profit, :decimal, comment: "当期純利益予想"
+  field :forecast_earnings_per_share, :decimal, comment: "一株当たり当期純利益予想"
+  
+  # 次期予想値
+  field :next_year_forecast_net_sales, :decimal, comment: "次期売上高予想"
+  field :next_year_forecast_operating_profit, :decimal, comment: "次期営業利益予想"
+  field :next_year_forecast_ordinary_profit, :decimal, comment: "次期経常利益予想"
+  field :next_year_forecast_profit, :decimal, comment: "次期当期純利益予想"
+  field :next_year_forecast_earnings_per_share, :decimal, comment: "次期一株当たり当期純利益予想"
+  
+  # 非連結財務指標
+  field :non_consolidated_net_sales, :decimal, comment: "売上高（非連結）"
+  field :non_consolidated_operating_profit, :decimal, comment: "営業利益（非連結）"
+  field :non_consolidated_ordinary_profit, :decimal, comment: "経常利益（非連結）"
+  field :non_consolidated_profit, :decimal, comment: "当期純利益（非連結）"
+  field :non_consolidated_earnings_per_share, :decimal, comment: "一株当たり当期純利益（非連結）"
+  field :non_consolidated_total_assets, :decimal, comment: "総資産（非連結）"
+  field :non_consolidated_equity, :decimal, comment: "純資産（非連結）"
+  field :non_consolidated_equity_to_asset_ratio, :decimal, comment: "自己資本比率（非連結）"
+  field :non_consolidated_book_value_per_share, :decimal, comment: "一株当たり純資産（非連結）"
+
+  timestamps()
+end
+```
+
+### マイグレーションファイル
+```elixir
+defmodule MoomooMarkets.Repo.Migrations.CreateStatements do
+  use Ecto.Migration
+
+  def change do
+    create table(:statements) do
+      add :disclosed_date, :date, null: false, comment: "開示日"
+      add :disclosed_time, :string, comment: "開示時刻"
+      add :local_code, :string, null: false, comment: "銘柄コード"
+      add :disclosure_number, :string, null: false, comment: "開示番号"
+      add :type_of_document, :string, null: false, comment: "開示書類種別"
+      add :type_of_current_period, :string, null: false, comment: "当期区分"
+      add :current_period_start_date, :date, comment: "当期開始日"
+      add :current_period_end_date, :date, comment: "当期終了日"
+      add :current_fiscal_year_start_date, :date, comment: "当期事業年度開始日"
+      add :current_fiscal_year_end_date, :date, comment: "当期事業年度終了日"
+      add :next_fiscal_year_start_date, :date, comment: "次期事業年度開始日"
+      add :next_fiscal_year_end_date, :date, comment: "次期事業年度終了日"
+      
+      # 主要財務指標
+      add :net_sales, :decimal, comment: "売上高"
+      add :operating_profit, :decimal, comment: "営業利益"
+      add :ordinary_profit, :decimal, comment: "経常利益"
+      add :profit, :decimal, comment: "当期純利益"
+      add :earnings_per_share, :decimal, comment: "一株当たり当期純利益"
+      add :diluted_earnings_per_share, :decimal, comment: "希釈後一株当たり当期純利益"
+      add :total_assets, :decimal, comment: "総資産"
+      add :equity, :decimal, comment: "純資産"
+      add :equity_to_asset_ratio, :decimal, comment: "自己資本比率"
+      add :book_value_per_share, :decimal, comment: "一株当たり純資産"
+      
+      # 予想値
+      add :forecast_net_sales, :decimal, comment: "売上高予想"
+      add :forecast_operating_profit, :decimal, comment: "営業利益予想"
+      add :forecast_ordinary_profit, :decimal, comment: "経常利益予想"
+      add :forecast_profit, :decimal, comment: "当期純利益予想"
+      add :forecast_earnings_per_share, :decimal, comment: "一株当たり当期純利益予想"
+      
+      # 次期予想値
+      add :next_year_forecast_net_sales, :decimal, comment: "次期売上高予想"
+      add :next_year_forecast_operating_profit, :decimal, comment: "次期営業利益予想"
+      add :next_year_forecast_ordinary_profit, :decimal, comment: "次期経常利益予想"
+      add :next_year_forecast_profit, :decimal, comment: "次期当期純利益予想"
+      add :next_year_forecast_earnings_per_share, :decimal, comment: "次期一株当たり当期純利益予想"
+      
+      # 非連結財務指標
+      add :non_consolidated_net_sales, :decimal, comment: "売上高（非連結）"
+      add :non_consolidated_operating_profit, :decimal, comment: "営業利益（非連結）"
+      add :non_consolidated_ordinary_profit, :decimal, comment: "経常利益（非連結）"
+      add :non_consolidated_profit, :decimal, comment: "当期純利益（非連結）"
+      add :non_consolidated_earnings_per_share, :decimal, comment: "一株当たり当期純利益（非連結）"
+      add :non_consolidated_total_assets, :decimal, comment: "総資産（非連結）"
+      add :non_consolidated_equity, :decimal, comment: "純資産（非連結）"
+      add :non_consolidated_equity_to_asset_ratio, :decimal, comment: "自己資本比率（非連結）"
+      add :non_consolidated_book_value_per_share, :decimal, comment: "一株当たり純資産（非連結）"
+
+      timestamps()
+    end
+
+    create unique_index(:statements, [:disclosure_number])
+    create index(:statements, [:local_code])
+    create index(:statements, [:disclosed_date])
+  end
+end
+```
+
+### 開示書類種別の管理
+開示書類種別は `MoomooMarkets.DataSources.JQuants.DocumentTypes` モジュールで管理されます。
+
+主な機能：
+1. **種別の取得**
+   ```elixir
+   # 全種別の取得
+   DocumentTypes.all_types()
+   
+   # 特定の種別の説明を取得
+   DocumentTypes.get_description("FYFinancialStatements_Consolidated_JP")
+   # => "決算短信（連結・日本基準）"
+   ```
+
+2. **種別の検証**
+   ```elixir
+   # 種別が有効かどうかを確認
+   DocumentTypes.valid_type?("FYFinancialStatements_Consolidated_JP")
+   # => true
+   ```
+
+3. **カテゴリ分類**
+   - 決算短信（連結・日本基準）
+   - 決算短信（連結・米国基準）
+   - 決算短信（非連結・日本基準）
+   - 決算短信（連結・ＪＭＩＳ）
+   - 決算短信（非連結・ＩＦＲＳ）
+   - 決算短信（連結・ＩＦＲＳ）
+   - 決算短信（非連結・外国株）
+   - 決算短信（連結・外国株）
+   - 決算短信（REIT）
+   - 予想修正
+
+### データ整合性の考慮事項
+1. 必須フィールド
+   - 開示日（disclosed_date）
+   - 銘柄コード（local_code）
+   - 開示番号（disclosure_number）
+   - 開示書類種別（type_of_document）
+   - 当期区分（type_of_current_period）
+
+2. 一意性制約
+   - 開示番号（disclosure_number）は一意である必要があります
+
+3. インデックス
+   - 開示番号に対するユニークインデックス
+   - 銘柄コードに対するインデックス
+   - 開示日に対するインデックス
+
+4. 開示書類種別の検証
+   - `DocumentTypes.valid_type?/1` を使用して種別の有効性を確認
+
+### エラーハンドリング
+1. 認証エラー
+   - トークンの有効期限切れ
+   - 認証情報の不正
+
+2. APIエラー
+   - リクエストパラメータの不正
+   - サーバーエラー
+   - レート制限
+
+3. レスポンス形式エラー
+   - JSONパースエラー
+   - 必須フィールドの欠落
+   - データ型の不一致
+   - 無効な開示書類種別
+
+### パフォーマンス考慮事項
+1. インデックス
+   - 銘柄コードと開示日による検索の最適化
+   - 開示番号による一意性チェックの効率化
+
+2. データ取得
+   - ページネーション対応
+   - バッチ処理による効率的なデータ保存
+
+### 実装優先順位
+1. マイグレーションファイルの作成
+2. スキーマの実装
+3. データ取得モジュールの実装
+4. テストの実装
+5. エラーハンドリングの実装
+6. パフォーマンス最適化
+
+### 使用例
+```elixir
+# 特定の銘柄の財務情報を取得
+MoomooMarkets.DataSources.JQuants.Statement.fetch_statements("86970", "2024-03-27")
+
+# 保存されたデータの確認
+Repo.all(MoomooMarkets.DataSources.JQuants.Statement)
+```
