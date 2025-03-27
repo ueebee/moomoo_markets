@@ -1014,7 +1014,9 @@ defmodule MoomooMarkets.DataSources.JQuants.WeeklyMarginInterest do
   def changeset(weekly_margin_interest, attrs) do
     weekly_margin_interest
     |> cast(attrs, [:code, :date, :issue_type, :short_margin_volume, :long_margin_volume])
-    |> validate_required([:code, :date, :issue_type, :short_margin_volume, :long_margin_volume])
+    |> validate_required([
+      :code, :date, :issue_type, :short_margin_volume, :long_margin_volume
+    ])
     |> unique_constraint([:code, :date, :issue_type])
   end
 end
@@ -1454,5 +1456,113 @@ end
 # データの取得
 TradingCalendar.fetch_trading_calendar("1", ~D[2024-01-01], ~D[2024-12-31])
 
-# 特定の日付の営業状況の確認
+# **特定の日付の営業状況の確認**
 TradingCalendar.get_by_date(~D[2024-01-01])
+```
+
+## 指数四本値データ (Indices)
+
+### 概要
+各種指数の四本値（始値、高値、安値、終値）の情報を管理します。
+2022年4月の東証市場区分再編により、一部の指数（例：マザーズ指数が東証グロース市場250指数に変更）が更新されています。
+
+### スキーマ定義
+```elixir
+defmodule MoomooMarkets.DataSources.JQuants.Index do
+  use Ecto.Schema
+  import Ecto.Changeset
+
+  schema "indices" do
+    field :date, :date, null: false  # 日付 (YYYY-MM-DD)
+    field :code, :string, null: false  # 指数コード
+    field :open, :float, null: false  # 始値
+    field :high, :float, null: false  # 高値
+    field :low, :float, null: false  # 安値
+    field :close, :float, null: false  # 終値
+
+    timestamps()
+  end
+end
+```
+
+### マイグレーションファイル
+```elixir
+defmodule MoomooMarkets.Repo.Migrations.CreateIndices do
+  use Ecto.Migration
+
+  def change do
+    create table(:indices) do
+      add :date, :date, null: false, comment: "日付"
+      add :code, :string, null: false, comment: "指数コード"
+      add :open, :float, null: false, comment: "始値"
+      add :high, :float, null: false, comment: "高値"
+      add :low, :float, null: false, comment: "安値"
+      add :close, :float, null: false, comment: "終値"
+
+      timestamps()
+    end
+
+    create unique_index(:indices, [:date, :code])
+    create index(:indices, [:code])
+  end
+end
+```
+
+### 指数コードの定義
+主要な指数コードは以下の通りです：
+- "0000": 日経平均株価
+- "0001": TOPIX
+- "0028": TOPIX-17 食品
+- "0029": TOPIX-17 エネルギー資源
+- "0030": TOPIX-17 建設・資材
+- "0031": TOPIX-17 素材・化学
+- "0032": TOPIX-17 医薬品
+- "0033": TOPIX-17 自動車・輸送機
+- "0034": TOPIX-17 鉄鋼・非鉄
+- "0035": TOPIX-17 機械
+- "0036": TOPIX-17 電機・精密
+- "0037": TOPIX-17 情報通信・サービスその他
+- "0038": TOPIX-17 電力・ガス
+- "0039": TOPIX-17 運輸・物流
+- "0040": TOPIX-17 商社・卸売
+- "0041": TOPIX-17 小売
+- "0042": TOPIX-17 銀行
+- "0043": TOPIX-17 金融（除く銀行）
+- "0044": TOPIX-17 不動産
+- "0500": 東証プライム市場指数
+- "0501": 東証スタンダード市場指数
+- "0502": 東証グロース市場指数
+- "0503": JPXプライム150指数
+
+### 考慮事項
+1. データの整合性
+   - 日付と指数コードの組み合わせは一意である必要があります
+   - 四本値は全て必須項目です
+   - 高値は始値以上、安値は高値以下、終値は安値以上高値以下である必要があります
+
+2. エラーハンドリング
+   - APIからのエラーレスポンスの適切な処理
+   - 無効な指数コードの検証
+   - 日付範囲の妥当性チェック
+   - 2020年10月1日のデータは前営業日の終値が収録されている点の考慮
+
+3. パフォーマンス
+   - 日付と指数コードの複合インデックス
+   - 指数コード単独のインデックス（特定の指数の履歴取得時）
+
+### 実装優先順位
+1. マイグレーションファイルの作成
+2. スキーマの実装
+3. データ取得モジュールの実装
+4. テストの実装
+
+### 使用例
+```elixir
+# 日経平均株価のデータを取得
+Index.fetch_indices("0000", ~D[2024-01-01], ~D[2024-12-31])
+
+# TOPIXのデータを取得
+Index.fetch_indices("0001", ~D[2024-01-01], ~D[2024-12-31])
+
+# 特定の指数の最新データを確認
+Index.get_latest_by_code("0000")
