@@ -61,6 +61,20 @@ config :logger, :console,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# Configure Oban
+config :moomoo_markets, Oban,
+  name: :default,
+  repo: MoomooMarkets.Repo,
+  plugins: [
+    {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7}, # 7 days
+    {Oban.Plugins.Stager, interval: :timer.minutes(1)}
+  ],
+  queues: [
+    default: 10,
+    high_priority: 20,
+    low_priority: 5
+  ]
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

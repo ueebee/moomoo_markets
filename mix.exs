@@ -62,7 +62,10 @@ defmodule MoomooMarkets.MixProject do
       {:dotenv, "~> 3.1.0"},
       {:req, "~> 0.5.10"},
       {:joken, "~> 2.5"},
-      {:bypass, "~> 2.1", only: :test}
+      {:bypass, "~> 2.1", only: :test},
+      {:oban, "~> 2.19"},
+      {:quantum, "~> 3.5"},
+      {:crontab, "~> 1.1"}
     ]
   end
 
