@@ -11,11 +11,12 @@ defmodule MoomooMarkets.Jobs.JobGroupManager do
   alias MoomooMarkets.Workers.DataFetchWorker
   alias MoomooMarkets.Repo
   alias Oban
+  alias Oban.Job
 
   # Client API
 
-  def start_link(_) do
-    GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
+  def start_link(opts) do
+    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
   def create_jobs_for_group(group_id) do
@@ -37,12 +38,9 @@ defmodule MoomooMarkets.Jobs.JobGroupManager do
   # Server Callbacks
 
   @impl true
-  def init(_) do
-    schedule_work()
-    {:ok, %{
-      job_groups: %{},
-      active_jobs: %{}
-    }}
+  def init(_opts) do
+    schedule_check()
+    {:ok, %{}}
   end
 
   @impl true
@@ -117,11 +115,8 @@ defmodule MoomooMarkets.Jobs.JobGroupManager do
 
   @impl true
   def handle_info(:check_job_groups, state) do
-    case check_job_groups() do
-      {:ok, _} -> :ok
-      {:error, reason} -> Logger.error("Failed to check job groups: #{inspect(reason)}")
-    end
-    schedule_work()  # Schedule next check
+    schedule_check()
+    {:ok, :checked} = check_job_groups()
     {:noreply, state}
   end
 
@@ -172,67 +167,64 @@ defmodule MoomooMarkets.Jobs.JobGroupManager do
   end
 
   defp update_job_schedules(job_group) do
-    # 既存のジョブのスケジュールを更新
-    from(j in Oban.Job,
-      where: j.args["job_group_id"] == ^job_group.id
+    from(j in Job,
+      where: fragment("?->>'job_group_id' = ?", j.args, ^job_group.id)
     )
-    |> Oban.update_all(set: [schedule: job_group.schedule])
-    |> case do
-      {_n, _jobs} -> {:ok, :updated}
-      {:error, reason} -> {:error, reason}
-    end
+    |> Repo.update_all(set: [schedule: job_group.schedule])
   end
 
   defp resume_jobs(job_group) do
-    # ジョブを再開
-    from(j in Oban.Job,
-      where: j.args["job_group_id"] == ^job_group.id
+    from(j in Job,
+      where: fragment("?->>'job_group_id' = ?", j.args, ^job_group.id)
     )
-    |> Oban.update_all(set: [state: "available"])
-    |> case do
-      {_n, _jobs} -> {:ok, :resumed}
-      {:error, reason} -> {:error, reason}
-    end
+    |> Repo.update_all(set: [state: "available"])
   end
 
   defp pause_jobs(job_group) do
-    # ジョブを一時停止
-    from(j in Oban.Job,
-      where: j.args["job_group_id"] == ^job_group.id
+    from(j in Job,
+      where: fragment("?->>'job_group_id' = ?", j.args, ^job_group.id)
     )
-    |> Oban.update_all(set: [state: "scheduled"])
-    |> case do
-      {_n, _jobs} -> {:ok, :paused}
-      {:error, reason} -> {:error, reason}
-    end
+    |> Repo.update_all(set: [state: "scheduled"])
   end
 
   defp check_job_groups do
-    # ジョブグループの状態をチェック
-    from(g in JobGroup,
-      where: g.is_enabled == true
-    )
+    JobGroup
     |> Repo.all()
-    |> Enum.each(fn group ->
-      case check_job_group_status(group) do
-        {:ok, _} -> :ok
-        {:error, reason} -> Logger.error("Failed to check job group #{group.id}: #{inspect(reason)}")
-      end
-    end)
+    |> Enum.each(&schedule_job_group/1)
     {:ok, :checked}
   end
 
-  defp check_job_group_status(job_group) do
-    query = from(j in Oban.Job, where: j.args["job_group_id"] == ^job_group.id and j.state == "failed")
-    failed_count = Repo.aggregate(query, :count)
-
-    if failed_count > 0 do
-      Logger.error("Job group #{job_group.id} has #{failed_count} failed jobs")
-      # TODO: 通知処理の実装
+  defp schedule_job_group(%JobGroup{is_enabled: true} = job_group) do
+    next_run = calculate_next_run(job_group.schedule)
+    if next_run do
+      %{
+        worker: MoomooMarkets.Workers.DataFetchWorker,
+        args: %{
+          "job_group_id" => job_group.id,
+          "parameters" => job_group.parameters_template
+        },
+        schedule_in: next_run
+      }
+      |> Oban.insert()
     end
   end
 
-  defp schedule_work do
+  defp schedule_job_group(_), do: nil
+
+  defp calculate_next_run(schedule) do
+    case Crontab.CronExpression.Parser.parse(schedule) do
+      {:ok, cron_expression} ->
+        now = DateTime.utc_now()
+        case Crontab.Scheduler.get_next_run_date(cron_expression, now) do
+          {:ok, next_run} ->
+            DateTime.diff(next_run, now, :second)
+          _ -> nil
+        end
+      _ -> nil
+    end
+  end
+
+  defp schedule_check do
     Process.send_after(self(), :check_job_groups, :timer.minutes(1))
   end
 end

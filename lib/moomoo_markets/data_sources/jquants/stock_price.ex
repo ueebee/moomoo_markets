@@ -6,7 +6,7 @@ defmodule MoomooMarkets.DataSources.JQuants.StockPrice do
   use Ecto.Schema
   import Ecto.Changeset
   import Ecto.Query
-  alias MoomooMarkets.DataSources.JQuants.{Auth, Error, Types}
+  alias MoomooMarkets.DataSources.JQuants.{Auth, Error}
   alias MoomooMarkets.Repo
 
   @type t :: %__MODULE__{

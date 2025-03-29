@@ -1,4 +1,4 @@
-defmodule MoomooMarkets.Repo.Migrations.CreateJobGroups do
+defmodule MoomooMarkets.Repo.Migrations.SetupJobSystem do
   use Ecto.Migration
 
   def change do
@@ -6,12 +6,13 @@ defmodule MoomooMarkets.Repo.Migrations.CreateJobGroups do
       add :name, :string, null: false
       add :description, :text
       add :schema_module, :string, null: false
-      add :schedule, :string
+      add :data_source_id, references(:data_sources, on_delete: :restrict), null: false
+      add :schedule, :string, null: false
       add :parameters_template, :map
       add :is_enabled, :boolean, default: true, null: false
-      add :data_source_id, references(:data_sources, on_delete: :delete_all), null: false
+      add :timezone, :string, default: "Asia/Tokyo", null: false
 
-      timestamps(type: :utc_datetime)
+      timestamps()
     end
 
     create index(:job_groups, [:data_source_id])

@@ -10,14 +10,11 @@ defmodule MoomooMarkets.Workers.DataFetchWorker do
   alias MoomooMarkets.Repo
 
   @impl Oban.Worker
-  def perform(%Oban.Job{id: job_id, args: %{
-    "job_group_id" => job_group_id,
-    "parameters" => parameters
-  }}) do
+  def perform(%Oban.Job{id: job_id, args: %{"job_group_id" => job_group_id, "parameters" => parameters}}) do
     Logger.info("Starting data fetch job #{job_id} for group #{job_group_id}")
     with {:ok, job_group} <- get_job_group(job_group_id),
          {:ok, data_source} <- get_data_source(job_group.data_source_id),
-         {:ok, schema_module} <- get_schema_module(job_group.schema_module),
+         {:ok, schema_module} <- get_schema_module(job_group),
          :ok <- validate_parameters(schema_module, parameters),
          {:ok, result} <- fetch_data(schema_module, data_source, parameters) do
       Logger.info("Successfully completed data fetch job #{job_id}")
@@ -48,9 +45,9 @@ defmodule MoomooMarkets.Workers.DataFetchWorker do
 
   # Private functions
 
-  defp get_job_group(id) do
-    case Repo.get(JobGroup, id) do
-      nil -> {:error, %{type: :job_group_not_found, message: "Job group #{id} not found"}}
+  defp get_job_group(job_group_id) do
+    case Repo.get(JobGroup, job_group_id) do
+      nil -> {:error, :job_group_not_found}
       job_group -> {:ok, job_group}
     end
   end
@@ -65,7 +62,7 @@ defmodule MoomooMarkets.Workers.DataFetchWorker do
   defp get_schema_module(module_name) do
     case Code.ensure_loaded(Module.concat(Elixir, module_name)) do
       {:module, module} -> {:ok, module}
-      {:error, reason} -> {:error, %{type: :module_not_found, message: "Module #{module_name} not found: #{inspect(reason)}"}}
+      {:error, _} -> {:error, :invalid_schema_module}
     end
   end
 
@@ -132,60 +129,11 @@ defmodule MoomooMarkets.Workers.DataFetchWorker do
   defp validate_date_range_parameters(_), do:
     {:error, %{type: :invalid_parameters, message: "Missing required parameters: from_date, to_date"}}
 
-  defp fetch_data(schema_module, data_source, parameters) do
-    case schema_module do
-      MoomooMarkets.DataSources.JQuants.StockPrice ->
-        case parameters do
-          %{"code" => code, "from_date" => from_date, "to_date" => to_date} ->
-            with {:ok, from} <- Date.from_iso8601(from_date),
-                 {:ok, to} <- Date.from_iso8601(to_date) do
-              schema_module.fetch_stock_prices(code, from, to)
-            else
-              {:error, _} -> {:error, %{type: :invalid_date_format, message: "Invalid date format"}}
-            end
-          _ ->
-            {:error, %{type: :invalid_parameters, message: "Missing required parameters"}}
-        end
-      MoomooMarkets.DataSources.JQuants.Stock ->
-        schema_module.fetch_listed_info()
-      MoomooMarkets.DataSources.JQuants.TradingCalendar ->
-        case parameters do
-          %{"from_date" => from_date, "to_date" => to_date} ->
-            with {:ok, from} <- Date.from_iso8601(from_date),
-                 {:ok, to} <- Date.from_iso8601(to_date) do
-              schema_module.fetch_trading_calendar(from, to)
-            else
-              {:error, _} -> {:error, %{type: :invalid_date_format, message: "Invalid date format"}}
-            end
-          _ ->
-            {:error, %{type: :invalid_parameters, message: "Missing required parameters"}}
-        end
-      MoomooMarkets.DataSources.JQuants.Statement ->
-        case parameters do
-          %{"code" => code, "from_date" => from_date, "to_date" => to_date} ->
-            with {:ok, from} <- Date.from_iso8601(from_date),
-                 {:ok, to} <- Date.from_iso8601(to_date) do
-              schema_module.fetch_statements(code, from, to)
-            else
-              {:error, _} -> {:error, %{type: :invalid_date_format, message: "Invalid date format"}}
-            end
-          _ ->
-            {:error, %{type: :invalid_parameters, message: "Missing required parameters"}}
-        end
-      MoomooMarkets.DataSources.JQuants.WeeklyMarginInterest ->
-        case parameters do
-          %{"from_date" => from_date, "to_date" => to_date} ->
-            with {:ok, from} <- Date.from_iso8601(from_date),
-                 {:ok, to} <- Date.from_iso8601(to_date) do
-              schema_module.fetch_weekly_margin_interests(from, to)
-            else
-              {:error, _} -> {:error, %{type: :invalid_date_format, message: "Invalid date format"}}
-            end
-          _ ->
-            {:error, %{type: :invalid_parameters, message: "Missing required parameters"}}
-        end
-      _ ->
-        {:error, %{type: :unsupported_schema_module, message: "Unsupported schema module: #{schema_module}"}}
+  defp fetch_data(schema_module, _data_source, parameters) do
+    try do
+      schema_module.fetch_data(parameters)
+    rescue
+      e -> {:error, Exception.message(e)}
     end
   end
 end

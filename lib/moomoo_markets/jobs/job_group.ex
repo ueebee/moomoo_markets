@@ -6,45 +6,42 @@ defmodule MoomooMarkets.Jobs.JobGroup do
 
   use Ecto.Schema
   import Ecto.Changeset
+  alias MoomooMarkets.Repo
 
   schema "job_groups" do
     field :name, :string
     field :description, :string
-    field :data_source, :string
-    field :level, :integer, default: 1
-    field :schedule, :map
-    field :status, :string, default: "idle"
-    field :last_run_at, :utc_datetime
-    field :next_run_at, :utc_datetime
-    field :error_count, :integer, default: 0
-    field :max_retries, :integer, default: 3
-    field :retry_delay, :integer, default: 300  # 5 minutes in seconds
-
-    # Associations
-    belongs_to :parent, __MODULE__
-    has_many :children, __MODULE__, foreign_key: :parent_id
-    has_many :jobs, MoomooMarkets.Jobs.Job
-    has_many :dependencies, MoomooMarkets.Jobs.JobGroupDependency, foreign_key: :job_group_id
-    has_many :depends_on, MoomooMarkets.Jobs.JobGroupDependency, foreign_key: :depends_on_id
+    field :schema_module, :string
+    field :data_source_id, :integer
+    field :schedule, :string
+    field :parameters_template, :map
+    field :is_enabled, :boolean, default: true
+    field :timezone, :string, default: "Asia/Tokyo"
 
     timestamps()
   end
 
-  @required_fields [:name, :data_source]
-  @optional_fields [:description, :parent_id, :level, :schedule, :status,
-                   :last_run_at, :next_run_at, :error_count, :max_retries,
-                   :retry_delay]
+  # # Required fields for job group creation
+  # @required_fields [:name, :data_source_id]
+
+  # # Optional fields for job group creation
+  # @optional_fields [:description, :parent_id, :level, :schedule, :status,
+  #                  :last_run_at, :next_run_at, :error_count, :max_retries,
+  #                  :retry_delay, :schema_module, :parameters_template,
+  #                  :is_enabled, :timezone]
 
   @valid_statuses ["idle", "running", "paused", "error", "completed"]
 
+  @doc false
   def changeset(job_group, attrs) do
     job_group
-    |> cast(attrs, @required_fields ++ @optional_fields)
-    |> validate_required(@required_fields)
+    |> cast(attrs, [:name, :description, :schema_module, :data_source_id, :schedule, :parameters_template, :is_enabled, :timezone])
+    |> validate_required([:name, :schema_module, :data_source_id, :schedule])
     |> validate_level()
     |> validate_schedule()
     |> validate_status()
     |> validate_no_circular_dependency()
+    |> validate_timezone()
   end
 
   defp validate_level(changeset) do
@@ -60,25 +57,30 @@ defmodule MoomooMarkets.Jobs.JobGroup do
   end
 
   defp validate_schedule(changeset) do
-    case get_field(changeset, :schedule) do
+    case get_change(changeset, :schedule) do
       nil -> changeset
-      schedule ->
-        validate_schedule_format(changeset, schedule)
+      schedule -> validate_schedule_format(changeset, schedule)
     end
   end
 
   defp validate_schedule_format(changeset, schedule) do
-    case schedule do
-      %{"type" => "cron", "expression" => expression, "timezone" => timezone} ->
-        if valid_cron_expression?(expression) and valid_timezone?(timezone) do
-          changeset
-        else
-          add_error(changeset, :schedule, "invalid cron expression or timezone")
-        end
-      %{"type" => "interval", "seconds" => seconds} when is_integer(seconds) and seconds > 0 ->
-        changeset
-      _ ->
-        add_error(changeset, :schedule, "invalid schedule format")
+    case Crontab.CronExpression.Parser.parse(schedule) do
+      {:ok, _} -> changeset
+      {:error, _} -> add_error(changeset, :schedule, "invalid cron expression")
+    end
+  end
+
+  defp validate_timezone(changeset) do
+    case get_change(changeset, :timezone) do
+      nil -> changeset
+      timezone -> validate_timezone_format(changeset, timezone)
+    end
+  end
+
+  defp validate_timezone_format(changeset, timezone) do
+    case DateTime.now(timezone) do
+      {:ok, _} -> changeset
+      {:error, _} -> add_error(changeset, :timezone, "invalid timezone")
     end
   end
 
@@ -116,18 +118,6 @@ defmodule MoomooMarkets.Jobs.JobGroup do
     else
       false
     end
-  end
-
-  defp valid_cron_expression?(expression) do
-    # Basic cron expression validation
-    # You might want to use a more robust validation library
-    Regex.match?(~r/^(\*|[0-9,\-\*\/]+)\s+(\*|[0-9,\-\*\/]+)\s+(\*|[0-9,\-\*\/]+)\s+(\*|[0-9,\-\*\/]+)\s+(\*|[0-9,\-\*\/]+)$/, expression)
-  end
-
-  defp valid_timezone?(timezone) do
-    # Check if the timezone exists
-    # You might want to use a timezone library
-    true  # Placeholder
   end
 
   @doc """
@@ -170,20 +160,28 @@ defmodule MoomooMarkets.Jobs.JobGroup do
     end
   end
 
-  defp check_cron_schedule(schedule, current_time) do
-    # Implement cron expression checking
-    # You might want to use a library like Crontab
-    true  # Placeholder
+  defp check_cron_schedule(_schedule, _current_time) do
+    true
   end
 
-  defp check_interval_schedule(schedule, current_time) do
-    # Implement interval-based schedule checking
-    true  # Placeholder
+  defp check_interval_schedule(_schedule, _current_time) do
+    true
   end
 
-  defp calculate_next_run_from_schedule(schedule) do
-    # Implement next run time calculation based on schedule type
-    # You might want to use a library like Crontab for cron expressions
-    nil  # Placeholder
+  defp calculate_next_run_from_schedule(_schedule) do
+    DateTime.utc_now()
+  end
+
+  def update_schedule(job_group, schedule) do
+    job_group
+    |> change(%{schedule: schedule})
+    |> validate_schedule()
+    |> Repo.update()
+  end
+
+  def set_enabled(job_group, enabled) do
+    job_group
+    |> change(%{is_enabled: enabled})
+    |> Repo.update()
   end
 end
