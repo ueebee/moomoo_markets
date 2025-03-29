@@ -59,8 +59,8 @@ defmodule MoomooMarkets.Workers.DataFetchWorker do
     end
   end
 
-  defp get_schema_module(module_name) do
-    case Code.ensure_loaded(Module.concat(Elixir, module_name)) do
+  defp get_schema_module(job_group) do
+    case Code.ensure_loaded(Module.concat(Elixir, job_group.schema_module)) do
       {:module, module} -> {:ok, module}
       {:error, _} -> {:error, :invalid_schema_module}
     end
