@@ -5,7 +5,6 @@ defmodule MockJQuants.Server do
   use Plug.Router
   require Logger
   alias MockJQuants.Responses.{Error, Success}
-  alias MockJQuants.Validators
   alias MockJQuants.Handlers.{AuthHandler, ListedInfoHandler, DailyQuotesHandler}
 
   plug :match

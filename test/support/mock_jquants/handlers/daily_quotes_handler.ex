@@ -15,7 +15,7 @@ defmodule MockJQuants.Handlers.DailyQuotesHandler do
               {:ok, params} ->
                 case generate_mock_data(params) do
                   {:ok, data} ->
-                    Success.generate(conn, 200, %{daily_quotes: data})
+                    Success.generate(conn, 200, data)
                   {:error, :internal_server_error} ->
                     Error.internal_server_error(conn)
                 end
@@ -51,7 +51,7 @@ defmodule MockJQuants.Handlers.DailyQuotesHandler do
   end
 
   defp generate_mock_data(%{"code" => "7203", "from" => _from, "to" => _to}) do
-    %{
+    {:ok, %{
       "daily_quotes" => [
         %{
           "Code" => "7203",
@@ -78,7 +78,7 @@ defmodule MockJQuants.Handlers.DailyQuotesHandler do
           "TurnoverValue" => 4200000000
         }
       ]
-    }
+    }}
   end
 
   defp generate_mock_data(_params) do
