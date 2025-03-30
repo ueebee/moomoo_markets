@@ -5,7 +5,7 @@ defmodule MockJQuants.Server do
   use Plug.Router
   require Logger
   alias MockJQuants.Responses.{Error, Success}
-  alias MockJQuants.Handlers.{AuthHandler, ListedInfoHandler, DailyQuotesHandler}
+  alias MockJQuants.Handlers.{AuthHandler, ListedInfoHandler, DailyQuotesHandler, TradesSpecHandler}
 
   plug :match
   plug Plug.Parsers, parsers: [:json], pass: ["application/json"], json_decoder: Jason
@@ -20,6 +20,7 @@ defmodule MockJQuants.Server do
   post "/token/auth_refresh", do: AuthHandler.handle_auth_refresh(conn)
   get "/listed/info", do: ListedInfoHandler.handle_request(conn)
   get "/prices/daily_quotes", do: DailyQuotesHandler.handle_request(conn)
+  get "/markets/trades_spec", do: TradesSpecHandler.handle_request(conn)
 
   # デフォルトのルート
   match _ do
