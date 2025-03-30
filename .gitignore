@@ -37,3 +37,5 @@ npm-debug.log
 
 .env
 _tmp/
+.cursor/
+.vscode/

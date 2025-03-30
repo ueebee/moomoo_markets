@@ -40,6 +40,7 @@ defmodule MoomooMarkets.Jobs.JobGroupManager do
   @impl true
   def init(_opts) do
     schedule_check()
+    {:ok, :checked} = check_job_groups()
     {:ok, %{}}
   end
 
@@ -123,9 +124,16 @@ defmodule MoomooMarkets.Jobs.JobGroupManager do
   # Private functions
 
   defp get_job_group(id) do
+    Logger.debug("Fetching job group with id: #{inspect(id)}")
+    Logger.debug("Current process: #{inspect(self())}")
+    Logger.debug("Repo: #{inspect(Repo)}")
     case Repo.get(JobGroup, id) do
-      nil -> {:error, :not_found}
-      job_group -> {:ok, job_group}
+      nil ->
+        Logger.debug("Job group not found for id: #{inspect(id)}")
+        {:error, :not_found}
+      job_group ->
+        Logger.debug("Found job group: #{inspect(job_group)}")
+        {:ok, job_group}
     end
   end
 
@@ -143,7 +151,7 @@ defmodule MoomooMarkets.Jobs.JobGroupManager do
 
   defp create_single_job(job_group, parameters) do
     %{
-      job_group_id: job_group.id,
+      job_group_id: to_string(job_group.id),
       parameters: parameters
     }
     |> DataFetchWorker.new()
@@ -167,24 +175,41 @@ defmodule MoomooMarkets.Jobs.JobGroupManager do
   end
 
   defp update_job_schedules(job_group) do
-    from(j in Job,
-      where: fragment("?->>'job_group_id' = ?", j.args, ^job_group.id)
-    )
-    |> Repo.update_all(set: [schedule: job_group.schedule])
+    next_run = calculate_next_run(job_group.schedule)
+    if next_run do
+      from(j in Job,
+        where: fragment("?->>'job_group_id' = ?", j.args, ^to_string(job_group.id))
+      )
+      |> Repo.update_all(set: [scheduled_at: DateTime.add(DateTime.utc_now(), next_run, :second)])
+      |> case do
+        {n, _} -> {:ok, n}
+        error -> {:error, error}
+      end
+    else
+      {:error, :invalid_schedule}
+    end
   end
 
   defp resume_jobs(job_group) do
     from(j in Job,
-      where: fragment("?->>'job_group_id' = ?", j.args, ^job_group.id)
+      where: fragment("?->>'job_group_id' = ?", j.args, ^to_string(job_group.id))
     )
     |> Repo.update_all(set: [state: "available"])
+    |> case do
+      {n, _} -> {:ok, n}
+      error -> {:error, error}
+    end
   end
 
   defp pause_jobs(job_group) do
     from(j in Job,
-      where: fragment("?->>'job_group_id' = ?", j.args, ^job_group.id)
+      where: fragment("?->>'job_group_id' = ?", j.args, ^to_string(job_group.id))
     )
     |> Repo.update_all(set: [state: "scheduled"])
+    |> case do
+      {n, _} -> {:ok, n}
+      error -> {:error, error}
+    end
   end
 
   defp check_job_groups do
@@ -200,7 +225,7 @@ defmodule MoomooMarkets.Jobs.JobGroupManager do
       %{
         worker: MoomooMarkets.Workers.DataFetchWorker,
         args: %{
-          "job_group_id" => job_group.id,
+          "job_group_id" => to_string(job_group.id),
           "parameters" => job_group.parameters_template
         },
         schedule_in: next_run
@@ -214,10 +239,10 @@ defmodule MoomooMarkets.Jobs.JobGroupManager do
   defp calculate_next_run(schedule) do
     case Crontab.CronExpression.Parser.parse(schedule) do
       {:ok, cron_expression} ->
-        now = DateTime.utc_now()
+        now = DateTime.utc_now() |> DateTime.to_naive()
         case Crontab.Scheduler.get_next_run_date(cron_expression, now) do
           {:ok, next_run} ->
-            DateTime.diff(next_run, now, :second)
+            NaiveDateTime.diff(next_run, now, :second)
           _ -> nil
         end
       _ -> nil
