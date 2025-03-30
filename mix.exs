@@ -25,6 +25,7 @@ defmodule MoomooMarkets.MixProject do
 
   # Specifies which paths to compile per environment.
   defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(:dev), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
   # Specifies your project dependencies.
@@ -88,7 +89,8 @@ defmodule MoomooMarkets.MixProject do
         "tailwind moomoo_markets --minify",
         "esbuild moomoo_markets --minify",
         "phx.digest"
-      ]
+      ],
+      mock: ["mock"]
     ]
   end
 end
