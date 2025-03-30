@@ -2,48 +2,15 @@ defmodule MoomooMarkets.DataSources.JQuants.AuthTest do
   use MoomooMarkets.DataCase
 
   alias MoomooMarkets.DataSources.JQuants.Auth
-  alias MoomooMarkets.{Accounts.User, DataSources.DataSource, DataSources.DataSourceCredential, Encryption}
+
+  alias MoomooMarkets.{
+    DataSources.DataSourceCredential
+  }
 
   setup do
     bypass = Bypass.open(port: 4040)
-
-    # ユーザーの作成
-    {:ok, user} =
-      Repo.insert(%User{
-        email: "test@example.com",
-        hashed_password: "dummy_hashed_password"
-      })
-
-    # データソースの作成
-    {:ok, data_source} =
-      Repo.insert(%DataSource{
-        name: "J-Quants",
-        provider_type: "jquants",
-        base_url: "http://localhost:4040"
-      })
-
-    # 認証情報の作成
-    encrypted_credentials =
-      Encryption.encrypt(
-        Jason.encode!(%{
-          "mailaddress" => "test@example.com",
-          "password" => "password"
-        })
-      )
-
-    {:ok, credential} =
-      Repo.insert(%DataSourceCredential{
-        user_id: user.id,
-        data_source_id: data_source.id,
-        encrypted_credentials: encrypted_credentials
-      })
-
-    %{
-      bypass: bypass,
-      data_source: data_source,
-      credential: credential,
-      user_id: user.id
-    }
+    seed_data = MoomooMarkets.TestSeedHelper.insert_test_seeds()
+    Map.put(seed_data, :bypass, bypass)
   end
 
   describe "ensure_valid_id_token/1" do
@@ -119,7 +86,10 @@ defmodule MoomooMarkets.DataSources.JQuants.AuthTest do
       updated_credential = Repo.get!(DataSourceCredential, credential.id)
       assert updated_credential.refresh_token == "new_refresh_token"
       assert updated_credential.id_token == "new_id_token"
-      assert DateTime.compare(updated_credential.refresh_token_expired_at, DateTime.utc_now()) == :gt
+
+      assert DateTime.compare(updated_credential.refresh_token_expired_at, DateTime.utc_now()) ==
+               :gt
+
       assert DateTime.compare(updated_credential.id_token_expired_at, DateTime.utc_now()) == :gt
     end
 

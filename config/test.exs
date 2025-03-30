@@ -54,5 +54,3 @@ config :moomoo_markets, Oban,
     high_priority: 20,
     low_priority: 5
   ]
-
-config :moomoo_markets, :data_fetcher_module, MoomooMarkets.TestData.MockDataFetcher
