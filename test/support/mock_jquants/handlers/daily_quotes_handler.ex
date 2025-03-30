@@ -50,48 +50,35 @@ defmodule MockJQuants.Handlers.DailyQuotesHandler do
     end
   end
 
-  defp generate_mock_data(%{"code" => "7203", "from" => from, "to" => to}) do
-    # トヨタ自動車のモックデータ
-    mock_data = [
-      %{
-        "Date" => "2024-03-24",
-        "Code" => "7203",
-        "Open" => 3500.0,
-        "High" => 3550.0,
-        "Low" => 3480.0,
-        "Close" => 3520.0,
-        "UpperLimit" => "0",
-        "LowerLimit" => "0",
-        "Volume" => 12_500_000.0,
-        "TurnoverValue" => 44_000_000_000.0,
-        "AdjustmentFactor" => 1.0,
-        "AdjustmentOpen" => 3500.0,
-        "AdjustmentHigh" => 3550.0,
-        "AdjustmentLow" => 3480.0,
-        "AdjustmentClose" => 3520.0,
-        "AdjustmentVolume" => 12_500_000.0
-      },
-      %{
-        "Date" => "2024-03-25",
-        "Code" => "7203",
-        "Open" => 3520.0,
-        "High" => 3580.0,
-        "Low" => 3510.0,
-        "Close" => 3550.0,
-        "UpperLimit" => "0",
-        "LowerLimit" => "0",
-        "Volume" => 13_000_000.0,
-        "TurnoverValue" => 46_150_000_000.0,
-        "AdjustmentFactor" => 1.0,
-        "AdjustmentOpen" => 3520.0,
-        "AdjustmentHigh" => 3580.0,
-        "AdjustmentLow" => 3510.0,
-        "AdjustmentClose" => 3550.0,
-        "AdjustmentVolume" => 13_000_000.0
-      }
-    ]
-
-    {:ok, mock_data}
+  defp generate_mock_data(%{"code" => "7203", "from" => _from, "to" => _to}) do
+    %{
+      "daily_quotes" => [
+        %{
+          "Code" => "7203",
+          "Date" => "2024-03-24",
+          "Open" => 3500,
+          "High" => 3550,
+          "Low" => 3480,
+          "Close" => 3520,
+          "UpperLimit" => 3800,
+          "LowerLimit" => 3200,
+          "Volume" => 1000000,
+          "TurnoverValue" => 3500000000
+        },
+        %{
+          "Code" => "7203",
+          "Date" => "2024-03-25",
+          "Open" => 3520,
+          "High" => 3580,
+          "Low" => 3500,
+          "Close" => 3550,
+          "UpperLimit" => 3800,
+          "LowerLimit" => 3200,
+          "Volume" => 1200000,
+          "TurnoverValue" => 4200000000
+        }
+      ]
+    }
   end
 
   defp generate_mock_data(_params) do

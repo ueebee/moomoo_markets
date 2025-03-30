@@ -34,7 +34,7 @@ defmodule MockJQuants.Handlers.AuthHandler do
   """
   def handle_auth_refresh(conn) do
     try do
-      case conn.body_params do
+      case conn.query_params do
         %{"refreshtoken" => refresh_token} ->
           if refresh_token == "new_refresh_token" do
             Success.generate(conn, 200, %{"idToken" => "new_id_token"})

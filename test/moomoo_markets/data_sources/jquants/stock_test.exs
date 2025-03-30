@@ -1,114 +1,20 @@
 defmodule MoomooMarkets.DataSources.JQuants.StockTest do
   use MoomooMarkets.DataCase
-  import Plug.Conn
 
   alias MoomooMarkets.DataSources.JQuants.{Stock, Error}
-  alias MoomooMarkets.{Accounts.User, DataSources.DataSource, DataSources.DataSourceCredential, Encryption}
+  alias MoomooMarkets.DataSources.DataSourceCredential
+  alias MoomooMarkets.Encryption
 
   setup do
-    bypass = Bypass.open(port: 4040)
-
-    # ユーザーの作成
-    {:ok, user} =
-      Repo.insert(%User{
-        email: "test@example.com",
-        hashed_password: "dummy_hashed_password"
-      })
-
-    # データソースの作成
-    {:ok, data_source} =
-      Repo.insert(%DataSource{
-        name: "J-Quants",
-        provider_type: "jquants",
-        base_url: "http://localhost:4040"
-      })
-
-    # 認証情報の作成
-    encrypted_credentials =
-      Encryption.encrypt(
-        Jason.encode!(%{
-          "mailaddress" => "test@example.com",
-          "password" => "password"
-        })
-      )
-
-    {:ok, credential} =
-      Repo.insert(%DataSourceCredential{
-        user_id: user.id,
-        data_source_id: data_source.id,
-        encrypted_credentials: encrypted_credentials
-      })
-
-    %{
-      bypass: bypass,
-      data_source: data_source,
-      credential: credential,
-      user_id: user.id
-    }
+    # テストデータの登録
+    seed_data = MoomooMarkets.TestSeedHelper.insert_test_seeds()
+    # data_sourceをロード
+    credential = Repo.preload(seed_data.credential, :data_source)
+    Map.put(seed_data, :credential, credential)
   end
 
   describe "fetch_listed_info/0" do
-    test "successfully fetches and saves listed info", %{bypass: bypass} do
-      # リフレッシュトークン取得のモック
-      Bypass.expect_once(bypass, "POST", "/token/auth_user", fn conn ->
-        conn
-        |> put_resp_content_type("application/json")
-        |> resp(200, Jason.encode!(%{"refreshToken" => "new_refresh_token"}))
-      end)
-
-      # IDトークン取得のモック
-      Bypass.expect_once(bypass, "POST", "/token/auth_refresh", fn conn ->
-        conn = Plug.Conn.fetch_query_params(conn)
-        assert conn.query_params["refreshtoken"] == "new_refresh_token"
-
-        conn
-        |> put_resp_content_type("application/json")
-        |> resp(200, Jason.encode!(%{"idToken" => "new_id_token"}))
-      end)
-
-      # モックのレスポンスを設定
-      mock_response = %{
-        "info" => [
-          %{
-            "Date" => "2024-03-25",
-            "Code" => "1301",
-            "CompanyName" => "極洋",
-            "CompanyNameEnglish" => "Kyokuyo Co., Ltd.",
-            "Sector17Code" => "2050",
-            "Sector17CodeName" => "水産・農林業",
-            "Sector33Code" => "2050",
-            "Sector33CodeName" => "水産・農林業",
-            "ScaleCategory" => "TOPIX Mid400",
-            "MarketCode" => "プライム",
-            "MarketCodeName" => "プライム市場",
-            "MarginCode" => "1",
-            "MarginCodeName" => "信用"
-          },
-          %{
-            "Date" => "2024-03-25",
-            "Code" => "1302",
-            "CompanyName" => "日本水産",
-            "CompanyNameEnglish" => "Nippon Suisan Kaisha, Ltd.",
-            "Sector17Code" => "2050",
-            "Sector17CodeName" => "水産・農林業",
-            "Sector33Code" => "2050",
-            "Sector33CodeName" => "水産・農林業",
-            "ScaleCategory" => "TOPIX Mid400",
-            "MarketCode" => "プライム",
-            "MarketCodeName" => "プライム市場",
-            "MarginCode" => "1",
-            "MarginCodeName" => "信用"
-          }
-        ]
-      }
-
-      # Bypassでモックのエンドポイントを設定
-      Bypass.expect_once(bypass, "GET", "/listed/info", fn conn ->
-        conn
-        |> put_resp_content_type("application/json")
-        |> resp(200, Jason.encode!(mock_response))
-      end)
-
+    test "successfully fetches and saves listed info", %{credential: _credential} do
       # API呼び出し
       assert {:ok, [2]} = Stock.fetch_listed_info()
 
@@ -116,90 +22,65 @@ defmodule MoomooMarkets.DataSources.JQuants.StockTest do
       stocks = Repo.all(Stock)
       assert length(stocks) == 2
 
-      # 最初のレコードの検証
+      # 最初のレコードの検証（トヨタ自動車のデータ）
       [first_stock | _] = stocks
-      assert first_stock.code == "1301"
-      assert first_stock.name == "極洋"
-      assert first_stock.sector_code == "2050"
-      assert first_stock.market_code == "プライム"
+      assert first_stock.code == "7203"
+      assert first_stock.name == "トヨタ自動車"
+      assert first_stock.sector_code == "3"
+      assert first_stock.market_code == "0111"
       assert first_stock.effective_date == Date.utc_today()
       assert first_stock.inserted_at != nil
       assert first_stock.updated_at != nil
     end
 
-    test "handles API errors", %{bypass: bypass} do
-      # リフレッシュトークン取得のモック
-      Bypass.expect_once(bypass, "POST", "/token/auth_user", fn conn ->
-        conn
-        |> put_resp_content_type("application/json")
-        |> resp(200, Jason.encode!(%{"refreshToken" => "new_refresh_token"}))
-      end)
-
-      # IDトークン取得のモック
-      Bypass.expect_once(bypass, "POST", "/token/auth_refresh", fn conn ->
-        conn = Plug.Conn.fetch_query_params(conn)
-        assert conn.query_params["refreshtoken"] == "new_refresh_token"
-
-        conn
-        |> put_resp_content_type("application/json")
-        |> resp(200, Jason.encode!(%{"idToken" => "new_id_token"}))
-      end)
-
-      # 認証エラー (401) のモック
-      Bypass.expect_once(bypass, "GET", "/listed/info", fn conn ->
-        conn
-        |> put_resp_content_type("application/json")
-        |> resp(401, Jason.encode!(%{"message" => "The incoming token is invalid or expired."}))
-      end)
+    test "handles API errors", %{credential: credential} do
+      # 認証情報を無効なものに変更
+      {:ok, _} = Repo.update(DataSourceCredential.changeset(
+        credential,
+        %{
+          encrypted_credentials: Encryption.encrypt(
+            Jason.encode!(%{
+              "mailaddress" => "test@example.com",
+              "password" => "wrong_password"
+            })
+          )
+        }
+      ))
 
       # API呼び出し
       assert {:error, %Error{
-        code: :api_error,
-        message: "API request failed",
-        details: %{
-          status: 401,
-          body: %{"message" => "The incoming token is invalid or expired."}
-        }
+        code: "HTTP_400",
+        message: "Failed to get refresh token: mailaddress or password is incorrect.",
+        details: nil
       }} = Stock.fetch_listed_info()
 
       # データベースにレコードが保存されていないことを確認
       assert Repo.all(Stock) == []
     end
 
-    test "handles invalid response format", %{bypass: bypass} do
-      # リフレッシュトークン取得のモック
-      Bypass.expect_once(bypass, "POST", "/token/auth_user", fn conn ->
-        conn
-        |> put_resp_content_type("application/json")
-        |> resp(200, Jason.encode!(%{"refreshToken" => "new_refresh_token"}))
-      end)
-
-      # IDトークン取得のモック
-      Bypass.expect_once(bypass, "POST", "/token/auth_refresh", fn conn ->
-        conn = Plug.Conn.fetch_query_params(conn)
-        assert conn.query_params["refreshtoken"] == "new_refresh_token"
-
-        conn
-        |> put_resp_content_type("application/json")
-        |> resp(200, Jason.encode!(%{"idToken" => "new_id_token"}))
-      end)
-
-      # 不正なレスポンス形式のモック
-      Bypass.expect_once(bypass, "GET", "/listed/info", fn conn ->
-        conn
-        |> put_resp_content_type("application/json")
-        |> resp(200, Jason.encode!(%{"invalid_key" => []}))
-      end)
+    test "handles invalid response format", %{credential: credential} do
+      # 認証情報を無効なものに変更
+      {:ok, _} = Repo.update(DataSourceCredential.changeset(
+        credential,
+        %{
+          encrypted_credentials: Encryption.encrypt(
+            Jason.encode!(%{
+              "mailaddress" => "forbidden@example.com",
+              "password" => "test_password"
+            })
+          )
+        }
+      ))
 
       # API呼び出し
       assert {:error, %Error{
-        code: :invalid_response,
-        message: "Invalid response format"
+        code: "HTTP_403",
+        message: "Failed to get refresh token: Missing Authentication Token. The method or resources may not be supported.",
+        details: nil
       }} = Stock.fetch_listed_info()
 
       # データベースにレコードが保存されていないことを確認
       assert Repo.all(Stock) == []
     end
   end
-
 end

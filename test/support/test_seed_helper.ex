@@ -31,7 +31,7 @@ defmodule MoomooMarkets.TestSeedHelper do
       Encryption.encrypt(
         Jason.encode!(%{
           "mailaddress" => "test@example.com",
-          "password" => "password"
+          "password" => "test_password"
         })
       )
 
