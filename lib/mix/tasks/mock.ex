@@ -38,7 +38,7 @@ defmodule Mix.Tasks.Mock do
     {:ok, _} = Application.ensure_all_started(:jason)
 
     # サーバーを起動
-    case Plug.Cowboy.http(MockJQuantsServer, [], port: port) do
+    case Plug.Cowboy.http(MockJQuants.Server, [], port: port) do
       {:ok, _pid} ->
         IO.puts("Mock server started successfully")
         # サーバーを永続的に実行
