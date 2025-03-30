@@ -65,7 +65,8 @@ defmodule MoomooMarkets.MixProject do
       {:bypass, "~> 2.1", only: :test},
       {:oban, "~> 2.19"},
       {:quantum, "~> 3.5"},
-      {:crontab, "~> 1.1"}
+      {:crontab, "~> 1.1"},
+      {:plug_cowboy, "~> 2.6"}
     ]
   end
 

@@ -24,7 +24,7 @@ defmodule MoomooMarkets.TestSeedHelper do
       Repo.insert(%DataSource{
         name: "J-Quants",
         provider_type: "jquants",
-        base_url: "http://localhost:4040"
+        base_url: "http://localhost:4444"
       })
 
     encrypted_credentials =

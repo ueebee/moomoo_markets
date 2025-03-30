@@ -4,13 +4,16 @@ defmodule MoomooMarkets.DataSources.JQuants.AuthTest do
   alias MoomooMarkets.DataSources.JQuants.Auth
 
   alias MoomooMarkets.{
-    DataSources.DataSourceCredential
+    DataSources.DataSourceCredential,
+    Encryption
   }
 
   setup do
-    bypass = Bypass.open(port: 4040)
+    # テストデータの登録
     seed_data = MoomooMarkets.TestSeedHelper.insert_test_seeds()
-    Map.put(seed_data, :bypass, bypass)
+    # data_sourceをロード
+    credential = Repo.preload(seed_data.credential, :data_source)
+    Map.put(seed_data, :credential, credential)
   end
 
   describe "ensure_valid_id_token/1" do
@@ -29,12 +32,9 @@ defmodule MoomooMarkets.DataSources.JQuants.AuthTest do
       assert {:ok, ^valid_id_token} = Auth.ensure_valid_id_token(credential.user_id)
     end
 
-    test "IDトークンが無効でリフレッシュトークンが有効な場合、新しいIDトークンを取得する", %{
-      bypass: bypass,
-      credential: credential
-    } do
+    test "IDトークンが無効でリフレッシュトークンが有効な場合、新しいIDトークンを取得する", %{credential: credential} do
       # 有効なリフレッシュトークンを持つクレデンシャルを作成
-      valid_refresh_token = "valid_refresh_token"
+      valid_refresh_token = "new_refresh_token"  # モックサーバーの正常系のトークン
       refresh_valid_until = DateTime.utc_now() |> DateTime.add(3600) |> DateTime.truncate(:second)
 
       {:ok, credential} =
@@ -44,17 +44,8 @@ defmodule MoomooMarkets.DataSources.JQuants.AuthTest do
         })
         |> Repo.update()
 
-      # Bypass設定
-      Bypass.expect_once(bypass, "POST", "/token/auth_refresh", fn conn ->
-        conn = Plug.Conn.fetch_query_params(conn)
-        assert conn.query_params["refreshtoken"] == valid_refresh_token
-
-        conn
-        |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(%{"idToken" => "new_id_token"}))
-      end)
-
-      assert {:ok, "new_id_token"} = Auth.ensure_valid_id_token(credential.user_id)
+      result = Auth.ensure_valid_id_token(credential.user_id)
+      assert {:ok, "new_id_token"} = result
 
       # データベースが更新されていることを確認
       updated_credential = Repo.get!(DataSourceCredential, credential.id)
@@ -62,23 +53,16 @@ defmodule MoomooMarkets.DataSources.JQuants.AuthTest do
       assert DateTime.compare(updated_credential.id_token_expired_at, DateTime.utc_now()) == :gt
     end
 
-    test "両方のトークンが無効な場合、新しいトークンを取得する", %{bypass: bypass, credential: credential} do
-      # Bypass設定 - リフレッシュトークン取得
-      Bypass.expect_once(bypass, "POST", "/token/auth_user", fn conn ->
-        conn
-        |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(%{"refreshToken" => "new_refresh_token"}))
-      end)
-
-      # Bypass設定 - IDトークン取得
-      Bypass.expect_once(bypass, "POST", "/token/auth_refresh", fn conn ->
-        conn = Plug.Conn.fetch_query_params(conn)
-        assert conn.query_params["refreshtoken"] == "new_refresh_token"
-
-        conn
-        |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(%{"idToken" => "new_id_token"}))
-      end)
+    test "両方のトークンが無効な場合、新しいトークンを取得する", %{credential: credential} do
+      # テスト用の認証情報を使用
+      {:ok, credential} =
+        Ecto.Changeset.change(credential, %{
+          encrypted_credentials: Encryption.encrypt(Jason.encode!(%{
+            mailaddress: "test@example.com",
+            password: "test_password"
+          }))
+        })
+        |> Repo.update()
 
       assert {:ok, "new_id_token"} = Auth.ensure_valid_id_token(credential.user_id)
 
@@ -87,31 +71,36 @@ defmodule MoomooMarkets.DataSources.JQuants.AuthTest do
       assert updated_credential.refresh_token == "new_refresh_token"
       assert updated_credential.id_token == "new_id_token"
 
-      assert DateTime.compare(updated_credential.refresh_token_expired_at, DateTime.utc_now()) ==
-               :gt
-
+      assert DateTime.compare(updated_credential.refresh_token_expired_at, DateTime.utc_now()) == :gt
       assert DateTime.compare(updated_credential.id_token_expired_at, DateTime.utc_now()) == :gt
     end
 
     test "認証情報が見つからない場合、エラーを返す" do
-      assert {:error, error} = Auth.ensure_valid_id_token(999)
+      assert {:error, error} = Auth.ensure_valid_id_token(9999999)
       assert error.code == "CREDENTIAL_NOT_FOUND"
     end
 
-    test "APIエラーの場合、エラーを返す", %{bypass: bypass, credential: credential} do
-      # Bypass設定
-      Bypass.expect_once(bypass, "POST", "/token/auth_user", fn conn ->
-        conn
-        |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(401, Jason.encode!(%{"message" => "Invalid credentials"}))
-      end)
+    test "APIエラーの場合、エラーを返す", %{credential: credential} do
+      # 403エラーを発生させるための認証情報
+      {:ok, credential} =
+        Ecto.Changeset.change(credential, %{
+          encrypted_credentials: Encryption.encrypt(Jason.encode!(%{
+            mailaddress: "forbidden@example.com",
+            password: "test_password"
+          }))
+        })
+        |> Repo.update()
 
       assert {:error, error} = Auth.ensure_valid_id_token(credential.user_id)
-      assert error.code == "HTTP_401"
+      assert error.code == "HTTP_403"
     end
 
-    test "APIサーバーがダウンしている場合、エラーを返す", %{bypass: bypass, credential: credential} do
-      Bypass.down(bypass)
+    test "APIサーバーがダウンしている場合、エラーを返す", %{credential: credential} do
+      # 無効なベースURLを設定してAPIサーバーがダウンしている状態をシミュレート
+      {:ok, _} = Repo.update(Ecto.Changeset.change(credential.data_source, %{
+        base_url: "http://invalid-host:4444"
+      }))
+
       assert {:error, error} = Auth.ensure_valid_id_token(credential.user_id)
       assert error.code == "HTTP_ERROR"
     end
