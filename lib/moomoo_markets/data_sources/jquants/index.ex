@@ -48,6 +48,35 @@ defmodule MoomooMarkets.DataSources.JQuants.Index do
     end
   end
 
+  @doc """
+  DataFetchWorkerから呼び出される関数。
+  パラメータから指数コードと日付範囲を取得して指数データを取得します。
+
+  ## パラメータ
+    - params: %{
+        "code" => "指数コード",
+        "from_date" => "開始日 (YYYY-MM-DD)",
+        "to_date" => "終了日 (YYYY-MM-DD)"
+      }
+
+  ## 戻り値
+    - {:ok, [%__MODULE__{}]} - 成功時
+    - {:error, %Error{}} - 失敗時
+  """
+  @spec fetch_data(map()) :: {:ok, [t()]} | {:error, Error.t()}
+  def fetch_data(%{"code" => code, "from_date" => from_date, "to_date" => to_date}) do
+    with {:ok, from} <- Date.from_iso8601(from_date),
+         {:ok, to} <- Date.from_iso8601(to_date) do
+      fetch_indices(code, from, to)
+    else
+      {:error, _} -> {:error, Error.error(:invalid_date, "Invalid date format")}
+    end
+  end
+
+  def fetch_data(_) do
+    {:error, Error.error(:invalid_params, "Missing required parameters: code, from_date, to_date")}
+  end
+
   @doc false
   def changeset(index, attrs) do
     index

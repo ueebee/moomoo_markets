@@ -51,6 +51,15 @@ defmodule MoomooMarkets.DataSources.JQuants.Stock do
   end
 
   @doc """
+  DataFetchWorkerから呼び出される関数。
+  パラメータは不要だが、インターフェースの互換性のために受け取る。
+  """
+  @spec fetch_data(map()) :: {:ok, [t()]} | {:error, Error.t()}
+  def fetch_data(_params) do
+    fetch_listed_info()
+  end
+
+  @doc """
   J-Quants APIから上場情報を取得し、データベースに保存します
   """
   @spec fetch_listed_info() :: {:ok, [t()]} | {:error, Error.t()}

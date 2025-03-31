@@ -78,6 +78,12 @@ defmodule MoomooMarkets.Workers.DataFetchWorker do
         validate_statement_parameters(parameters)
       MoomooMarkets.DataSources.JQuants.WeeklyMarginInterest ->
         validate_date_range_parameters(parameters)
+      MoomooMarkets.DataSources.JQuants.Breakdown ->
+        validate_breakdown_parameters(parameters)
+      MoomooMarkets.DataSources.JQuants.Index ->
+        validate_index_parameters(parameters)
+      MoomooMarkets.DataSources.JQuants.ShortSelling ->
+        validate_short_selling_parameters(parameters)
       _ ->
         {:error, %{type: :unsupported_schema_module, message: "Unsupported schema module: #{schema_module}"}}
     end
@@ -128,6 +134,54 @@ defmodule MoomooMarkets.Workers.DataFetchWorker do
 
   defp validate_date_range_parameters(_), do:
     {:error, %{type: :invalid_parameters, message: "Missing required parameters: from_date, to_date"}}
+
+  defp validate_breakdown_parameters(%{"code" => code, "from_date" => from_date, "to_date" => to_date}) do
+    with {:ok, from} <- Date.from_iso8601(from_date),
+         {:ok, to} <- Date.from_iso8601(to_date),
+         true <- is_binary(code),
+         true <- String.length(code) > 0,
+         true <- Date.compare(from, to) in [:lt, :eq] do
+      :ok
+    else
+      false -> {:error, %{type: :invalid_parameters, message: "Invalid date range or code format"}}
+      {:error, _} -> {:error, %{type: :invalid_date_format, message: "Invalid date format"}}
+    end
+  end
+
+  defp validate_breakdown_parameters(_), do:
+    {:error, %{type: :invalid_parameters, message: "Missing required parameters: code, from_date, to_date"}}
+
+  defp validate_index_parameters(%{"code" => code, "from_date" => from_date, "to_date" => to_date}) do
+    with {:ok, from} <- Date.from_iso8601(from_date),
+         {:ok, to} <- Date.from_iso8601(to_date),
+         true <- is_binary(code),
+         true <- String.length(code) > 0,
+         true <- Date.compare(from, to) in [:lt, :eq] do
+      :ok
+    else
+      false -> {:error, %{type: :invalid_parameters, message: "Invalid date range or code format"}}
+      {:error, _} -> {:error, %{type: :invalid_date_format, message: "Invalid date format"}}
+    end
+  end
+
+  defp validate_index_parameters(_), do:
+    {:error, %{type: :invalid_parameters, message: "Missing required parameters: code, from_date, to_date"}}
+
+  defp validate_short_selling_parameters(%{"sector33_code" => code, "from_date" => from_date, "to_date" => to_date}) do
+    with {:ok, from} <- Date.from_iso8601(from_date),
+         {:ok, to} <- Date.from_iso8601(to_date),
+         true <- is_binary(code),
+         true <- String.length(code) > 0,
+         true <- Date.compare(from, to) in [:lt, :eq] do
+      :ok
+    else
+      false -> {:error, %{type: :invalid_parameters, message: "Invalid date range or code format"}}
+      {:error, _} -> {:error, %{type: :invalid_date_format, message: "Invalid date format"}}
+    end
+  end
+
+  defp validate_short_selling_parameters(_), do:
+    {:error, %{type: :invalid_parameters, message: "Missing required parameters: sector33_code, from_date, to_date"}}
 
   defp fetch_data(schema_module, _data_source, parameters) do
     try do
