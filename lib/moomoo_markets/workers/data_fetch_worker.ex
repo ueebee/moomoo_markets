@@ -68,12 +68,8 @@ defmodule MoomooMarkets.Workers.DataFetchWorker do
 
   defp validate_parameters(schema_module, parameters) do
     case schema_module do
-      MoomooMarkets.DataSources.JQuants.StockPrice ->
-        validate_stock_price_parameters(parameters)
       MoomooMarkets.DataSources.JQuants.Stock ->
-        :ok  # パラメータ不要
-      MoomooMarkets.DataSources.JQuants.TradingCalendar ->
-        validate_date_range_parameters(parameters)
+        :ok
       MoomooMarkets.DataSources.JQuants.Statement ->
         validate_statement_parameters(parameters)
       MoomooMarkets.DataSources.JQuants.WeeklyMarginInterest ->
@@ -84,6 +80,12 @@ defmodule MoomooMarkets.Workers.DataFetchWorker do
         validate_index_parameters(parameters)
       MoomooMarkets.DataSources.JQuants.ShortSelling ->
         validate_short_selling_parameters(parameters)
+      MoomooMarkets.DataSources.JQuants.TradesSpec ->
+        validate_trades_spec_parameters(parameters)
+      MoomooMarkets.DataSources.JQuants.TradingCalendar ->
+        validate_date_range_parameters(parameters)
+      MoomooMarkets.DataSources.JQuants.StockPrice ->
+        validate_stock_price_parameters(parameters)
       _ ->
         {:error, %{type: :unsupported_schema_module, message: "Unsupported schema module: #{schema_module}"}}
     end
@@ -182,6 +184,22 @@ defmodule MoomooMarkets.Workers.DataFetchWorker do
 
   defp validate_short_selling_parameters(_), do:
     {:error, %{type: :invalid_parameters, message: "Missing required parameters: sector33_code, from_date, to_date"}}
+
+  defp validate_trades_spec_parameters(%{"section" => section, "from_date" => from_date, "to_date" => to_date}) do
+    with {:ok, from} <- Date.from_iso8601(from_date),
+         {:ok, to} <- Date.from_iso8601(to_date),
+         true <- is_binary(section),
+         true <- String.length(section) > 0,
+         true <- Date.compare(from, to) in [:lt, :eq] do
+      :ok
+    else
+      false -> {:error, %{type: :invalid_parameters, message: "Invalid date range or section format"}}
+      {:error, _} -> {:error, %{type: :invalid_date_format, message: "Invalid date format"}}
+    end
+  end
+
+  defp validate_trades_spec_parameters(_), do:
+    {:error, %{type: :invalid_parameters, message: "Missing required parameters: section, from_date, to_date"}}
 
   defp fetch_data(schema_module, _data_source, parameters) do
     try do
