@@ -73,3 +73,6 @@ Repo.insert(%DataSourceCredential{
   data_source_id: jquants.id,
   encrypted_credentials: encrypted_credentials
 })
+
+# ジョブグループのシード
+Code.require_file("seeds/job_groups.exs", __DIR__)

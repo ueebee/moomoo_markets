@@ -6,7 +6,7 @@ defmodule MoomooMarkets.DataSources.JQuants.StockPrice do
   use Ecto.Schema
   import Ecto.Changeset
   import Ecto.Query
-  alias MoomooMarkets.DataSources.JQuants.{Auth, Error, Types}
+  alias MoomooMarkets.DataSources.JQuants.{Auth, Error}
   alias MoomooMarkets.Repo
 
   @type t :: %__MODULE__{
@@ -74,6 +74,43 @@ defmodule MoomooMarkets.DataSources.JQuants.StockPrice do
       save_stock_prices(data)
     else
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc """
+  指定されたパラメータに基づいて株価データを取得します。
+
+  ## パラメータ
+    - `code`: 銘柄コード（必須）
+    - `from_date`: 開始日（必須、YYYY-MM-DD形式）
+    - `to_date`: 終了日（必須、YYYY-MM-DD形式）
+
+  ## 戻り値
+    - `{:ok, %{count: integer()}}`: 成功時、保存したレコード数を返す
+    - `{:error, Error.t()}`: 失敗時、エラー情報を返す
+  """
+  @spec fetch_data(map()) :: {:ok, map()} | {:error, Error.t()}
+  def fetch_data(%{"code" => code, "from_date" => from_date, "to_date" => to_date}) do
+    with {:ok, from} <- Date.from_iso8601(from_date),
+         {:ok, to} <- Date.from_iso8601(to_date),
+         true <- is_binary(code),
+         true <- String.length(code) > 0,
+         true <- Date.compare(from, to) in [:lt, :eq] do
+      fetch_stock_prices(code, from, to)
+    else
+      false -> {:error, Error.error(:invalid_parameters, "Invalid code format or date range")}
+      {:error, _} -> {:error, Error.error(:invalid_date_format, "Invalid date format. Expected YYYY-MM-DD")}
+    end
+  end
+
+  def fetch_data(params) do
+    missing_params =
+      ["code", "from_date", "to_date"]
+      |> Enum.filter(fn param -> !Map.has_key?(params, param) end)
+
+    case missing_params do
+      [] -> {:error, Error.error(:invalid_parameters, "Invalid parameters format")}
+      params -> {:error, Error.error(:missing_parameters, "Missing required parameters: #{Enum.join(params, ", ")}")}
     end
   end
 

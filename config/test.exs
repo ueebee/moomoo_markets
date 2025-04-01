@@ -39,5 +39,16 @@ config :phoenix, :plug_init_mode, :runtime
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
 
-# Configure J-Quants API base URL for test environment
-config :moomoo_markets, :jquants_api_base_url, "http://localhost:#{System.get_env("BYPASS_PORT", "4040")}"
+
+config :moomoo_markets, Oban,
+  testing: :inline,
+  repo: MoomooMarkets.Repo,
+  plugins: [
+    {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7}, # 7 days
+    {Oban.Plugins.Stager, interval: :timer.minutes(1)}
+  ],
+  queues: [
+    default: 10,
+    high_priority: 20,
+    low_priority: 5
+  ]

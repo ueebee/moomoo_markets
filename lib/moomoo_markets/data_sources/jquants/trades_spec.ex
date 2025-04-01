@@ -6,7 +6,7 @@ defmodule MoomooMarkets.DataSources.JQuants.TradesSpec do
   use Ecto.Schema
   import Ecto.Changeset
   import Ecto.Query
-  alias MoomooMarkets.DataSources.JQuants.{Auth, Error, Types}
+  alias MoomooMarkets.DataSources.JQuants.{Auth, Error}
   alias MoomooMarkets.Repo
 
   @market_sections [
@@ -195,6 +195,37 @@ defmodule MoomooMarkets.DataSources.JQuants.TradesSpec do
     else
       {:error, reason} -> {:error, reason}
     end
+  end
+
+  @doc """
+  DataFetchWorkerから呼び出される関数。
+  パラメータから市場区分と日付範囲を取得して投資部門別売買状況を取得します。
+
+  ## パラメータ
+    - params: %{
+        "section" => "市場区分",
+        "from_date" => "開始日 (YYYY-MM-DD)",
+        "to_date" => "終了日 (YYYY-MM-DD)"
+      }
+
+  ## 戻り値
+    - {:ok, [%__MODULE__{}]} - 成功時
+    - {:error, %Error{}} - 失敗時
+  """
+  @spec fetch_data(map()) :: {:ok, [t()]} | {:error, Error.t()}
+  def fetch_data(%{"section" => section, "from_date" => from_date, "to_date" => to_date}) do
+    with {:ok, from} <- Date.from_iso8601(from_date),
+         {:ok, to} <- Date.from_iso8601(to_date),
+         true <- valid_section?(section) do
+      fetch_trades_spec(section, from, to)
+    else
+      false -> {:error, Error.error(:invalid_section, "Invalid market section")}
+      {:error, _} -> {:error, Error.error(:invalid_date, "Invalid date format")}
+    end
+  end
+
+  def fetch_data(_) do
+    {:error, Error.error(:invalid_params, "Missing required parameters: section, from_date, to_date")}
   end
 
   @doc false

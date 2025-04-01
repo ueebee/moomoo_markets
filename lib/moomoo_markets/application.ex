@@ -17,6 +17,7 @@ defmodule MoomooMarkets.Application do
       # Start a worker by calling: MoomooMarkets.Worker.start_link(arg)
       # {MoomooMarkets.Worker, arg},
       # Start to serve requests, typically the last entry
+      {Oban, Application.fetch_env!(:moomoo_markets, Oban)},
       MoomooMarketsWeb.Endpoint
     ]
 
